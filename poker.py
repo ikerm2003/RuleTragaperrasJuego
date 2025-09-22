@@ -1,10 +1,10 @@
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
-from PyQt6.QtCore import Qt
+# from PyQt6.QtCore import Qt
 
-from mainui import MainUI
+# from mainui import MainUI
 import sys
-import os
+# import os
 import random
 
 class BaseCard:
@@ -30,6 +30,83 @@ class BaseDeck:
         self.cards = self.cards[num:]
         return dealt_cards
     
+class Puntuation:
+    def __init__(self, player_hand, community_cards):
+        self.player_hand = player_hand
+        self.community_cards = community_cards
+        self.all_cards = player_hand + community_cards
+        self.rankings = {
+            "High Card": 1,
+            "One Pair": 2,
+            "Two Pair": 3,
+            "Three of a Kind": 4,
+            "Straight": 5,
+            "Flush": 6,
+            "Full House": 7,
+            "Four of a Kind": 8,
+            "Straight Flush": 9,
+            "Royal Flush": 10
+        }
+        if self.check_hand(self.all_cards):
+            self.rank_hand = self.evaluate_hand(self.all_cards)
+        else:
+            raise ValueError("Invalid hand: duplicate cards detected.")
+
+    def check_hand(self, cards):
+        # Se comprueba que la mano del jugador y las cartas comunitarias formen una mano válida de póker
+        # No puede haber cartas repetidas, mismas cartas en la mano del jugador y en las comunitarias, etc.
+        seen = set()
+        for card in cards:
+            if card in seen:
+                return False
+            seen.add(card)
+        return True
+
+    def evaluate_hand(self, cards):
+        values = [card.value for card in cards]
+        suits = [card.suit for card in cards]
+        value_counts = {value: values.count(value) for value in set(values)}
+        suit_counts = {suit: suits.count(suit) for suit in set(suits)}
+        for rank in self.rankings:
+            puntuation = 0
+            match rank:
+                case "Royal Flush":
+                    if all(v in values for v in ['10', 'J', 'Q', 'K', 'A']) and (5 in suit_counts.values()):
+                        puntuation = max(self.rankings[rank], puntuation)
+                        return puntuation
+                case "Straight Flush":
+                    pass
+                case "Four of a Kind":
+                    if 4 in value_counts.values():
+                        puntuation = max(self.rankings[rank], puntuation)
+                        return puntuation
+                case "Full House":
+                    if (3 in value_counts.values()) and (2 in value_counts.values()):
+                        puntuation = max(self.rankings[rank], puntuation)
+                        return puntuation
+                case "Flush":
+                    if 5 in suit_counts.values():
+                        puntuation = max(self.rankings[rank], puntuation)
+                        return puntuation
+                case "Straight":
+                    pass
+                case "Three of a Kind":
+                    if 3 in value_counts.values():
+                        puntuation = max(self.rankings[rank], puntuation)
+                        return puntuation
+                case "Two Pair":
+                    if list(value_counts.values()).count(2) == 2:
+                        puntuation = max(self.rankings[rank], puntuation)
+                        return puntuation
+                case "One Pair":
+                    if 2 in value_counts.values():
+                        puntuation = max(self.rankings[rank], puntuation)
+                        return puntuation
+                case "High Card":
+                    if (value_counts == 1) and (suit_counts == 1):
+                        puntuation = max(self.rankings[rank], puntuation)
+                        return puntuation
+
 class PokerGame:
     def __init__(self):
         self.deck = BaseDeck()
