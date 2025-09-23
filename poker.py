@@ -5,30 +5,10 @@ from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
 # from mainui import MainUI
 import sys
 # import os
-import random
+# import random
 
-class BaseCard:
-    def __init__(self, value, suit):
-        self.value = value
-        self.suit = suit
-        
-
-    def __repr__(self):
-        return f"{self.value} of {self.suit}"
+from cardCommon import PokerDeck
     
-class BaseDeck:
-    def __init__(self):
-        self.suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
-        self.values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
-        self.cards = [BaseCard(value, suit) for suit in self.suits for value in self.values]
-        
-    def shuffle(self):
-        random.shuffle(self.cards)
-        
-    def deal(self, num=1):
-        dealt_cards = self.cards[:num]
-        self.cards = self.cards[num:]
-        return dealt_cards
     
 class Puntuation:
     def __init__(self, player_hand, community_cards):
@@ -75,7 +55,7 @@ class Puntuation:
                         puntuation = max(self.rankings[rank], puntuation)
                         return puntuation
                 case "Straight Flush":
-                    pass
+                    pass #TODO: Implementar lógica para Escalera de Color
                 case "Four of a Kind":
                     if 4 in value_counts.values():
                         puntuation = max(self.rankings[rank], puntuation)
@@ -89,7 +69,7 @@ class Puntuation:
                         puntuation = max(self.rankings[rank], puntuation)
                         return puntuation
                 case "Straight":
-                    pass
+                    pass #TODO: Implementar lógica para Escalera
                 case "Three of a Kind":
                     if 3 in value_counts.values():
                         puntuation = max(self.rankings[rank], puntuation)
@@ -109,17 +89,23 @@ class Puntuation:
 
 class PokerGame:
     def __init__(self):
-        self.deck = BaseDeck()
+        self.deck = PokerDeck()
         self.deck.shuffle()
         self.players_cards = []
         self.community_cards = []
     
     def start_new_hand(self):
-        self.deck = BaseDeck()
+        self.deck = PokerDeck()
         self.deck.shuffle()
         self.player_cards = self.deck.deal(2)
-        self.community_cards = self.deck.deal(5) # Flop (3), turn (1), river (1)
-        
+        self.community_cards = self.deck.deal(3)
+
+    def deal_turn(self):
+        self.community_cards.append(self.deck.deal(1)[0])
+
+    def deal_river(self):
+        self.community_cards.append(self.deck.deal(1)[0])
+
 class PokerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
