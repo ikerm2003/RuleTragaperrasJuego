@@ -5,30 +5,10 @@ from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
 # from mainui import MainUI
 import sys
 # import os
-import random
+# import random
 
-class BaseCard:
-    def __init__(self, value, suit):
-        self.value = value
-        self.suit = suit
-        
-
-    def __repr__(self):
-        return f"{self.value} of {self.suit}"
+from cardCommon import PokerDeck
     
-class BaseDeck:
-    def __init__(self):
-        self.suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
-        self.values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
-        self.cards = [BaseCard(value, suit) for suit in self.suits for value in self.values]
-        
-    def shuffle(self):
-        random.shuffle(self.cards)
-        
-    def deal(self, num=1):
-        dealt_cards = self.cards[:num]
-        self.cards = self.cards[num:]
-        return dealt_cards
     
 class Puntuation:
     def __init__(self, player_hand, community_cards):
@@ -63,64 +43,69 @@ class Puntuation:
         return True
 
     def evaluate_hand(self, cards):
+        # Ordenar cartas por valor para facilitar detección de escaleras
+        numeric_values = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, 
+                         '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14}
+        
         values = [card.value for card in cards]
         suits = [card.suit for card in cards]
         value_counts = {value: values.count(value) for value in set(values)}
         suit_counts = {suit: suits.count(suit) for suit in set(suits)}
-        for rank in self.rankings:
-            puntuation = 0
-            match rank:
-                case "Royal Flush":
-                    if all(v in values for v in ['10', 'J', 'Q', 'K', 'A']) and (5 in suit_counts.values()):
-                        puntuation = max(self.rankings[rank], puntuation)
-                        return puntuation
-                case "Straight Flush":
-                    pass
-                case "Four of a Kind":
-                    if 4 in value_counts.values():
-                        puntuation = max(self.rankings[rank], puntuation)
-                        return puntuation
-                case "Full House":
-                    if (3 in value_counts.values()) and (2 in value_counts.values()):
-                        puntuation = max(self.rankings[rank], puntuation)
-                        return puntuation
-                case "Flush":
-                    if 5 in suit_counts.values():
-                        puntuation = max(self.rankings[rank], puntuation)
-                        return puntuation
-                case "Straight":
-                    pass
-                case "Three of a Kind":
-                    if 3 in value_counts.values():
-                        puntuation = max(self.rankings[rank], puntuation)
-                        return puntuation
-                case "Two Pair":
-                    if list(value_counts.values()).count(2) == 2:
-                        puntuation = max(self.rankings[rank], puntuation)
-                        return puntuation
-                case "One Pair":
-                    if 2 in value_counts.values():
-                        puntuation = max(self.rankings[rank], puntuation)
-                        return puntuation
-                case "High Card":
-                    if (value_counts == 1) and (suit_counts == 1):
-                        puntuation = max(self.rankings[rank], puntuation)
-                        return puntuation
+        
+        # Verificar escalera
+        def is_straight(values):
+            nums = sorted([numeric_values[v] for v in values])
+            for i in range(len(nums) - 4):
+                if nums[i+4] - nums[i] == 4 and len(set(nums[i:i+5])) == 5:
+                    return True
+            return False
+        
+        # Verificar color
+        is_flush = 5 in suit_counts.values()
+        is_straight_hand = is_straight(values)
+        
+        # Evaluar mano en orden de mayor a menor
+        if is_straight_hand and is_flush:
+            if all(v in values for v in ['10', 'J', 'Q', 'K', 'A']):
+                return self.rankings["Royal Flush"]
+            return self.rankings["Straight Flush"]
+        elif 4 in value_counts.values():
+            return self.rankings["Four of a Kind"]
+        elif 3 in value_counts.values() and 2 in value_counts.values():
+            return self.rankings["Full House"]
+        elif is_flush:
+            return self.rankings["Flush"]
+        elif is_straight_hand:
+            return self.rankings["Straight"]
+        elif 3 in value_counts.values():
+            return self.rankings["Three of a Kind"]
+        elif list(value_counts.values()).count(2) == 2:
+            return self.rankings["Two Pair"]
+        elif 2 in value_counts.values():
+            return self.rankings["One Pair"]
+        else:
+            return self.rankings["High Card"]
 
 class PokerGame:
     def __init__(self):
-        self.deck = BaseDeck()
+        self.deck = PokerDeck()
         self.deck.shuffle()
         self.players_cards = []
         self.community_cards = []
     
     def start_new_hand(self):
-        self.deck = BaseDeck()
+        self.deck = PokerDeck()
         self.deck.shuffle()
         self.player_cards = self.deck.deal(2)
-        self.community_cards = self.deck.deal(5) # Flop (3), turn (1), river (1)
-        
-class PokerWindow(QMainWindow):
+        self.community_cards = self.deck.deal(3)
+
+    def deal_turn(self):
+        self.community_cards.append(self.deck.deal(1)[0])
+
+    def deal_river(self):
+        self.community_cards.append(self.deck.deal(1)[0])
+
+class PokerWindow(QMainWindow): #TODO: Modificar UI para que incluya un banco, apuestas más relacionadas con el holdem, posibilidad de varios jugadores y una interfaz mas bonita, basada en lo que ya hay hecho (es decir, las cartas deben dibujarse, pero puede mejorarse el diseño), asi mismo, añadir un proceso de juego en el que los jugadores lo hagan en orden como el poker holdem, se debe subir segun las reglas, etc. Asegurate de que la UI sea lo más realista al poker holdem real.
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Poker Game")
