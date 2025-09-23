@@ -134,4 +134,4 @@ class SpanishDeck(BaseDeck):
         self.cards = []
         for suit in SpanishCard.SPANISH_SUITS:
             for value in SpanishCard.SPANISH_VALUES:
-                self.cards.append(SpanishCard(value, suit))
+                self.cards.append(SpanishCard(value, suit)) 
