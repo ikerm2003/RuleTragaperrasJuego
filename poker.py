@@ -105,7 +105,8 @@ class PokerGame:
     def deal_river(self):
         self.community_cards.append(self.deck.deal(1)[0])
 
-class PokerWindow(QMainWindow): #TODO: Modificar UI para que incluya un banco, apuestas más relacionadas con el holdem, posibilidad de varios jugadores y una interfaz mas bonita, basada en lo que ya hay hecho (es decir, las cartas deben dibujarse, pero puede mejorarse el diseño), asi mismo, añadir un proceso de juego en el que los jugadores lo hagan en orden como el poker holdem, se debe subir segun las reglas, etc. Asegurate de que la UI sea lo más realista al poker holdem real.
+
+class PokerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Poker Game")
