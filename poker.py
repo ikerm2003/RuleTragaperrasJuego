@@ -265,6 +265,13 @@ class PokerGame:
             return self.players[self.current_player]
         return None
     
+    def get_human_player(self) -> Optional[Player]:
+        """Obtiene el jugador humano"""
+        for player in self.players:
+            if player.is_human:
+                return player
+        return None
+    
 class Puntuation:
     def __init__(self, player_hand, community_cards):
         self.player_hand = player_hand
@@ -362,12 +369,12 @@ class PokerWindow(QMainWindow):
         self.bet_slider = None
         self.bet_spinbox = None
         
-        self.init_ui()
-        self.start_new_game()
-        
         # Timer for bot actions
         self.bot_timer = QTimer()
         self.bot_timer.timeout.connect(self.handle_bot_action)
+        
+        self.init_ui()
+        self.start_new_game()
         
     def init_ui(self):
         # Set main widget and layout
