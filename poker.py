@@ -87,7 +87,7 @@ class Puntuation:
                         puntuation = max(self.rankings[rank], puntuation)
                         return puntuation
 
-class PokerGame:
+class PokerGame: #TODO: Modificar UI para que incluya un banco, apuestas más relacionadas con el holdem, posibilidad de varios jugadores y una interfaz mas bonita, basada en lo que ya hay hecho (es decir, las cartas deben dibujarse, pero puede mejorarse el diseño), asi mismo, añadir un proceso de juego en el que los jugadores lo hagan en orden como el poker holdem, se debe subir segun las reglas, etc. Asegurate de que la UI sea lo más realista al poker holdem real.
     def __init__(self):
         self.deck = PokerDeck()
         self.deck.shuffle()
