@@ -361,24 +361,6 @@ class PokerGame:
                 color: {text_color};
             }}
         """
-                return self.rankings["Royal Flush"]
-            return self.rankings["Straight Flush"]
-        elif 4 in value_counts.values():
-            return self.rankings["Four of a Kind"]
-        elif 3 in value_counts.values() and 2 in value_counts.values():
-            return self.rankings["Full House"]
-        elif is_flush:
-            return self.rankings["Flush"]
-        elif is_straight_hand:
-            return self.rankings["Straight"]
-        elif 3 in value_counts.values():
-            return self.rankings["Three of a Kind"]
-        elif list(value_counts.values()).count(2) == 2:
-            return self.rankings["Two Pair"]
-        elif 2 in value_counts.values():
-            return self.rankings["One Pair"]
-        else:
-            return self.rankings["High Card"]
 
 
 
