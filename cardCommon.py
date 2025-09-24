@@ -36,7 +36,7 @@ class BaseDeck(ABC):
         self._create_deck()
     
     @abstractmethod
-    def _create_deck(self):
+    def _create_deck(self) -> list[str]:
         """Método abstracto para crear la baraja específica"""
         pass
     
@@ -91,13 +91,14 @@ class PokerCard(BaseCard):
 
 class PokerDeck(BaseDeck):
     """Baraja estándar de póker de 52 cartas"""
-    
-    def _create_deck(self):
+
+    def _create_deck(self) -> list[str]:
         """Crea una baraja completa de póker"""
         self.cards = []
         for suit in PokerCard.POKER_SUITS:
             for value in PokerCard.POKER_VALUES:
                 self.cards.append(PokerCard(value, suit))
+        return self.cards
 
 
 class SpanishCard(BaseCard):
@@ -128,10 +129,11 @@ class SpanishCard(BaseCard):
 
 class SpanishDeck(BaseDeck):
     """Baraja española de 40 cartas"""
-    
-    def _create_deck(self):
+
+    def _create_deck(self) -> list[str]:
         """Crea una baraja española completa"""
         self.cards = []
         for suit in SpanishCard.SPANISH_SUITS:
             for value in SpanishCard.SPANISH_VALUES:
-                self.cards.append(SpanishCard(value, suit)) 
+                self.cards.append(SpanishCard(value, suit))
+        return self.cards
