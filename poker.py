@@ -252,10 +252,8 @@ class PokerGame:
         if not active_players:
             self.phase = GamePhase.FINISHED
             return
-        
         # Guardar el pot antes de distribuirlo
         pot_amount = self.pot
-            
         if len(active_players) == 1:
             # Solo un jugador activo
             winner = active_players[0]
