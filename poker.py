@@ -1,5 +1,6 @@
+from typing import Any
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QPushButton, QLabel, QSlider, QSpinBox, QGridLayout, QFrame)
+                             QPushButton, QLabel, QSlider, QSpinBox, QGridLayout, QFrame, QMessageBox)
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor, QPalette
 from PyQt6.QtCore import Qt, QTimer
 
@@ -32,7 +33,7 @@ class Player:
     name: str
     chips: int
     position: int
-    hand: List = None
+    hand: List = None #type:ignore
     current_bet: int = 0
     total_bet_in_hand: int = 0
     is_active: bool = True
@@ -42,7 +43,7 @@ class Player:
     
     def __post_init__(self):
         if self.hand is None:
-            self.hand = []
+            self.hand = [] #type:ignore
     
     def can_act(self) -> bool:
         return self.is_active and not self.is_folded and not self.is_all_in
@@ -68,6 +69,7 @@ class PokerGame:
         self.current_bet = 0
         self.phase = GamePhase.WAITING
         self.min_raise = big_blind
+        self.winner: Optional[Player] = None  # Para almacenar el ganador de la mano
         
         # Initialize players
         for i in range(num_players):
@@ -246,14 +248,30 @@ class PokerGame:
     
     def _showdown(self):
         """Determina el ganador y distribuye el pot"""
-        # Simplified showdown - just give pot to first active player
-        # In a real implementation, you'd evaluate hands
         active_players = [p for p in self.players if not p.is_folded]
-        if active_players:
+        if not active_players:
+            self.phase = GamePhase.FINISHED
+            return
+        
+        # Guardar el pot antes de distribuirlo
+        pot_amount = self.pot
+            
+        if len(active_players) == 1:
+            # Solo un jugador activo
             winner = active_players[0]
             winner.chips += self.pot
-            self.pot = 0
+            self.winner = winner
+        else:
+            # Evaluar manos para determinar ganador
+            # Por simplicidad, elegimos al primer jugador activo
+            # En una implementación real evaluarías las manos usando Puntuation
+            winner = active_players[0]
+            winner.chips += self.pot
+            self.winner = winner
         
+        # Guardar información del pot ganado
+        self._last_pot = pot_amount
+        self.pot = 0
         self.phase = GamePhase.FINISHED
         
         # Advance dealer button
@@ -350,11 +368,22 @@ class Puntuation:
                         return puntuation
 
 
+class PlayerDisplayFrame(QFrame):
+    """Custom QFrame that can store player display elements"""
+    def __init__(self):
+        super().__init__()
+        self.name_label: Optional[QLabel] = None
+        self.chips_label: Optional[QLabel] = None
+        self.bet_label: Optional[QLabel] = None
+        self.total_bet_label: Optional[QLabel] = None
+        self.card_labels: List[QLabel] = []
+        self.crown_label: Optional[QLabel] = None
+
 class PokerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Texas Hold'em Poker")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(50, 50, 1400, 900)  # Ventana más grande para mejor visualización
         
         # Initialize game with 4 players
         self.game = PokerGame(num_players=4, small_blind=10, big_blind=20)
@@ -363,11 +392,6 @@ class PokerWindow(QMainWindow):
         self.community_card_labels = []
         self.player_displays = []
         self.action_buttons = []
-        self.pot_label = None
-        self.phase_label = None
-        self.current_player_label = None
-        self.bet_slider = None
-        self.bet_spinbox = None
         
         # Timer for bot actions
         self.bot_timer = QTimer()
@@ -414,10 +438,11 @@ class PokerWindow(QMainWindow):
                 margin: 10px;
             }
         """)
-        game_widget.setFixedHeight(500)
+        game_widget.setFixedHeight(600)  # Más alto para acomodar mejor los elementos
         main_layout.addWidget(game_widget)
         
         game_layout = QGridLayout(game_widget)
+        game_layout.setSpacing(20)  # Mejor espaciado entre elementos
         
         # Players positions (4 players around the table)
         player_positions = [
@@ -440,12 +465,14 @@ class PokerWindow(QMainWindow):
         
         for i in range(5):
             card_label = QLabel()
-            card_label.setFixedSize(60, 90)
+            card_label.setFixedSize(80, 120)  # Cartas más grandes
             card_label.setStyleSheet("""
-                border: 2px solid #FFD700;
+                border: 3px solid #FFD700;
                 background-color: white;
-                border-radius: 8px;
-                margin: 2px;
+                border-radius: 10px;
+                margin: 5px;
+                font-size: 14px;
+                font-weight: bold;
             """)
             card_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             card_label.setText("?")
@@ -454,71 +481,99 @@ class PokerWindow(QMainWindow):
         
         game_layout.addWidget(community_frame, 1, 1, Qt.AlignmentFlag.AlignCenter)
         
-        # Human player action panel
-        self.create_action_panel(main_layout)
-        
-        # Status bar
+        # Status label
         self.status_label = QLabel("¡Bienvenido al Texas Hold'em! Haz clic en 'Nueva Mano' para empezar.")
         self.status_label.setStyleSheet("background-color: #f0f0f0; padding: 8px; border-radius: 5px;")
         main_layout.addWidget(self.status_label)
+        
+        # Create action panel
+        self.create_action_panel(main_layout)
     
-    def create_player_display(self, player_index: int) -> QFrame:
+    def create_player_display(self, player_index: int) -> PlayerDisplayFrame:
         """Crea la visualización de un jugador"""
         player = self.game.players[player_index]
         
-        frame = QFrame()
-        frame.setFixedSize(200, 120)
+        frame = PlayerDisplayFrame()
+        frame.setFixedSize(220, 160)  # Más grande para mejor legibilidad
         frame.setStyleSheet("""
             QFrame {
-                background-color: rgba(139, 69, 19, 0.8);
+                background-color: rgba(139, 69, 19, 0.9);
                 border: 2px solid #8B4513;
-                border-radius: 10px;
+                border-radius: 12px;
                 color: white;
+                padding: 5px;
             }
         """)
         
         layout = QVBoxLayout(frame)
+        layout.setSpacing(4)  # Mejor espaciado
+        layout.setContentsMargins(8, 8, 8, 8)
+        
+        # Crown (inicialmente oculto)
+        crown_label = QLabel("👑")
+        crown_label.setFont(QFont("Arial", 16))
+        crown_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        crown_label.setStyleSheet("color: gold;")
+        crown_label.hide()  # Oculto por defecto
         
         # Player name and chips
         name_label = QLabel(player.name)
-        name_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        name_label.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_label.setStyleSheet("color: white; font-weight: bold;")
         
-        chips_label = QLabel(f"${player.chips}")
+        chips_label = QLabel(f"Fichas: ${player.chips}")
         chips_label.setFont(QFont("Arial", 9))
         chips_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        chips_label.setStyleSheet("color: lightgreen; font-weight: bold;")
         
         # Cards area
         cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(5)
+        card_labels = []
         for i in range(2):
             card_label = QLabel()
-            card_label.setFixedSize(30, 45)
+            card_label.setFixedSize(45, 65)  # Cartas más grandes
             card_label.setStyleSheet("""
-                border: 1px solid white;
+                border: 2px solid white;
                 background-color: navy;
-                border-radius: 3px;
-                margin: 1px;
+                border-radius: 6px;
+                margin: 2px;
+                color: white;
+                font-size: 10px;
+                font-weight: bold;
             """)
             card_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             card_label.setText("?")
             cards_layout.addWidget(card_label)
+            card_labels.append(card_label)
         
-        # Bet info
-        bet_label = QLabel("$0")
-        bet_label.setFont(QFont("Arial", 8))
+        # Bet info mejorada
+        bet_label = QLabel("Apuesta: $0")
+        bet_label.setFont(QFont("Arial", 9))
         bet_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        bet_label.setStyleSheet("color: yellow;")
+        bet_label.setStyleSheet("color: yellow; font-weight: bold; background-color: rgba(0,0,0,0.3); padding: 2px; border-radius: 3px;")
         
+        # Total apostado en la mano
+        total_bet_label = QLabel("Total: $0")
+        total_bet_label.setFont(QFont("Arial", 9))
+        total_bet_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        total_bet_label.setStyleSheet("color: cyan; font-weight: bold; background-color: rgba(0,0,0,0.3); padding: 2px; border-radius: 3px;")
+        
+        layout.addWidget(crown_label)
         layout.addWidget(name_label)
         layout.addWidget(chips_label)
         layout.addLayout(cards_layout)
         layout.addWidget(bet_label)
+        layout.addWidget(total_bet_label)
         
         # Store references to labels for updating
         frame.name_label = name_label
         frame.chips_label = chips_label
         frame.bet_label = bet_label
-        frame.card_labels = [cards_layout.itemAt(i).widget() for i in range(2)]
+        frame.total_bet_label = total_bet_label
+        frame.card_labels = card_labels
+        frame.crown_label = crown_label
         
         return frame
     
@@ -618,6 +673,7 @@ class PokerWindow(QMainWindow):
     
     def start_new_game(self):
         """Inicia una nueva mano"""
+        self.game.winner = None  # Reset winner
         self.game.start_new_hand()
         self.update_display()
         self.update_action_buttons()
@@ -645,72 +701,149 @@ class PokerWindow(QMainWindow):
         for i, card_label in enumerate(self.community_card_labels):
             if i < len(self.game.community_cards):
                 pixmap = self.load_card_image(self.game.community_cards[i])
-                card_label.setPixmap(pixmap.scaled(60, 90, Qt.AspectRatioMode.KeepAspectRatio))
+                card_label.setPixmap(pixmap.scaled(80, 120, Qt.AspectRatioMode.KeepAspectRatio))
+                card_label.setText("")  # Limpiar texto cuando hay imagen
+                card_label.setStyleSheet("""
+                    border: 3px solid #FFD700;
+                    background-color: white;
+                    border-radius: 10px;
+                    margin: 5px;
+                """)
             else:
                 card_label.clear()
                 card_label.setText("?")
+                card_label.setStyleSheet("""
+                    border: 3px solid #FFD700;
+                    background-color: white;
+                    border-radius: 10px;
+                    margin: 5px;
+                    font-size: 14px;
+                    font-weight: bold;
+                    color: black;
+                """)
         
         # Update player displays
         for i, player_frame in enumerate(self.player_displays):
             player = self.game.players[i]
             
-            # Update chips and bet
-            player_frame.chips_label.setText(f"${player.chips}")
-            player_frame.bet_label.setText(f"${player.current_bet}")
+            # Update chips and bet info
+            player_frame.chips_label.setText(f"Fichas: ${player.chips}")
+            player_frame.bet_label.setText(f"Apuesta: ${player.current_bet}")
+            player_frame.total_bet_label.setText(f"Total: ${player.total_bet_in_hand}")
             
-            # Update card visibility based on if it's human player
-            if player.is_human and player.hand:
-                # Show human player's cards
+            # Mostrar corona si es el ganador
+            if self.game.winner and player == self.game.winner and self.game.phase == GamePhase.FINISHED:
+                player_frame.crown_label.show()
+            else:
+                player_frame.crown_label.hide()
+            
+            # Update card visibility
+            show_cards = False
+            if player.is_human:
+                show_cards = True  # Siempre mostrar cartas del jugador humano
+            elif player.is_folded or self.game.phase == GamePhase.FINISHED:
+                show_cards = True  # Mostrar cartas si se retiró o terminó el juego
+            
+            if show_cards and player.hand:
+                # Show player's cards
                 for j, card_label in enumerate(player_frame.card_labels):
                     if j < len(player.hand):
                         pixmap = self.load_card_image(player.hand[j])
-                        card_label.setPixmap(pixmap.scaled(30, 45, Qt.AspectRatioMode.KeepAspectRatio))
+                        card_label.setPixmap(pixmap.scaled(45, 65, Qt.AspectRatioMode.KeepAspectRatio))
+                        card_label.setText("")  # Limpiar texto cuando hay imagen
+                        card_label.setStyleSheet("""
+                            border: 2px solid white;
+                            background-color: white;
+                            border-radius: 6px;
+                            margin: 2px;
+                        """)
+                        card_label.show()  # Asegurar que esté visible
                     else:
+                        # Ocultar labels de cartas que no existen
                         card_label.clear()
+                        card_label.hide()
             else:
-                # Hide other players' cards
-                for card_label in player_frame.card_labels:
+                # Hide cards (show back of cards)
+                for j, card_label in enumerate(player_frame.card_labels):
                     card_label.clear()
-                    if player.hand:
+                    if player.hand and j < len(player.hand):
+                        # Mostrar reverso de carta solo si la carta existe
                         card_label.setText("?")
                         card_label.setStyleSheet("""
-                            border: 1px solid white;
+                            border: 2px solid white;
                             background-color: navy;
-                            border-radius: 3px;
-                            margin: 1px;
+                            border-radius: 6px;
+                            margin: 2px;
                             color: white;
+                            font-size: 12px;
+                            font-weight: bold;
                         """)
+                        card_label.show()
+                    else:
+                        # Ocultar completamente labels innecesarios
+                        card_label.hide()
+
+        # Highlight current player
+        if current_player and i == self.game.current_player and not player.is_folded:
+            player_frame.setStyleSheet("""
+                QFrame {
+                    background-color: rgba(255, 215, 0, 0.9);
+                    border: 4px solid #FFD700;
+                    border-radius: 12px;
+                    color: black;
+                    padding: 5px;
+                    }
+                """)
+        # Show folded players differently
+        elif player.is_folded:
+            player_frame.setStyleSheet("""
+                QFrame {
+                    background-color: rgba(100, 100, 100, 0.7);
+                    border: 2px solid #666666;
+                    border-radius: 12px;
+                    color: #cccccc;
+                    padding: 5px;
+                    }
+                """)
+        # Show winner with golden border
+        elif self.game.winner and player == self.game.winner and self.game.phase == GamePhase.FINISHED:
+            player_frame.setStyleSheet("""
+                QFrame {
+                    background-color: rgba(255, 215, 0, 0.95);
+                border: 5px solid gold;
+                border-radius: 12px;
+                color: black;
+                padding: 5px;
+                font-weight: bold;
+                }
+            """)
+        else:
+            player_frame.setStyleSheet("""
+                QFrame {
+                    background-color: rgba(139, 69, 19, 0.9);
+                    border: 2px solid #8B4513;
+                    border-radius: 12px;
+                    color: white;
+                    padding: 5px;
+                }
+                """)
+        # Mostrar mensaje de ganador si la partida terminó
+        if self.game.phase == GamePhase.FINISHED and self.game.winner:
+            self.show_winner_message()
+
+    def show_winner_message(self):
+        """Muestra un mensaje emergente con el ganador"""
+        if self.game.winner:
+            winner_name = self.game.winner.name
+            pot_won = getattr(self.game, '_last_pot', 0)
             
-            # Highlight current player
-            if current_player and i == self.game.current_player:
-                player_frame.setStyleSheet("""
-                    QFrame {
-                        background-color: rgba(255, 215, 0, 0.8);
-                        border: 3px solid #FFD700;
-                        border-radius: 10px;
-                        color: black;
-                    }
-                """)
-            else:
-                player_frame.setStyleSheet("""
-                    QFrame {
-                        background-color: rgba(139, 69, 19, 0.8);
-                        border: 2px solid #8B4513;
-                        border-radius: 10px;
-                        color: white;
-                    }
-                """)
-            
-            # Show folded players
-            if player.is_folded:
-                player_frame.setStyleSheet("""
-                    QFrame {
-                        background-color: rgba(100, 100, 100, 0.5);
-                        border: 2px solid #666666;
-                        border-radius: 10px;
-                        color: #999999;
-                    }
-                """)
+            msg = QMessageBox()
+            msg.setWindowTitle("¡Partida Terminada!")
+            msg.setText(f"🎉 ¡{winner_name} ha ganado la mano! 🎉")
+            msg.setInformativeText(f"Ganó ${pot_won} fichas")
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.exec()
     
     def update_action_buttons(self):
         """Actualiza el estado de los botones de acción"""
@@ -718,7 +851,7 @@ class PokerWindow(QMainWindow):
         current_player = self.game.get_current_player()
         
         # Enable buttons only if it's human player's turn
-        is_human_turn = current_player and current_player.is_human
+        is_human_turn = bool(current_player and current_player.is_human)
         
         self.fold_button.setEnabled(is_human_turn)
         self.check_call_button.setEnabled(is_human_turn)
@@ -844,6 +977,7 @@ class PokerWindow(QMainWindow):
         # Check if game phase advanced or another bot needs to act
         if self.game.phase == GamePhase.FINISHED:
             self.status_label.setText("Mano terminada. Haz clic en 'Nueva Mano' para continuar.")
+            # No mostrar mensaje aquí porque update_display ya lo hace
         elif self.game.phase == GamePhase.SHOWDOWN:
             self.status_label.setText("¡Showdown! Mostrando cartas...")
         else:
@@ -851,7 +985,7 @@ class PokerWindow(QMainWindow):
     
     def load_card_image(self, card):
         """Crea un pixmap con la representación visual de la carta"""
-        pixmap = QPixmap(80, 120)
+        pixmap = QPixmap(120, 180)  # Cartas más grandes
         pixmap.fill(QColor("white"))
         
         painter = QPainter(pixmap)
@@ -865,15 +999,15 @@ class PokerWindow(QMainWindow):
         
         painter.setPen(color)
         
-        # Fuente para el valor
-        font = QFont("Arial", 12, QFont.Weight.Bold)
+        # Fuente para el valor - más grande
+        font = QFont("Arial", 16, QFont.Weight.Bold)
         painter.setFont(font)
         
         # Dibujar el valor en la esquina superior izquierda
-        painter.drawText(5, 18, card.value)
+        painter.drawText(8, 25, card.value)
         
         # Fuente más pequeña para el símbolo del palo
-        font_small = QFont("Arial", 8)
+        font_small = QFont("Arial", 12, QFont.Weight.Bold)
         painter.setFont(font_small)
         
         # Símbolos de los palos
@@ -886,20 +1020,30 @@ class PokerWindow(QMainWindow):
         
         # Dibujar símbolo del palo
         symbol = suit_symbols.get(card.suit, card.suit)
-        painter.drawText(5, 30, symbol)
+        painter.drawText(8, 45, symbol)
         
         # Dibujar valor y símbolo más grandes en el centro
-        font_center = QFont("Arial", 14, QFont.Weight.Bold)
+        font_center = QFont("Arial", 20, QFont.Weight.Bold)
         painter.setFont(font_center)
-        painter.drawText(25, 65, f"{card.value}")
+        painter.drawText(45, 95, f"{card.value}")
         
-        font_center_symbol = QFont("Arial", 20, QFont.Weight.Bold)
+        font_center_symbol = QFont("Arial", 28, QFont.Weight.Bold)
         painter.setFont(font_center_symbol)
-        painter.drawText(25, 85, symbol)
+        painter.drawText(45, 125, symbol)
         
-        # Dibujar borde
+        # Valor y símbolo rotados en la esquina inferior derecha
+        painter.save()
+        painter.translate(112, 155)
+        painter.rotate(180)
+        font_small_rotated = QFont("Arial", 12, QFont.Weight.Bold)
+        painter.setFont(font_small_rotated)
+        painter.drawText(0, 0, card.value)
+        painter.drawText(0, 15, symbol)
+        painter.restore()
+        
+        # Dibujar borde limpio
         painter.setPen(QColor("black"))
-        painter.drawRect(0, 0, 79, 119)
+        painter.drawRect(0, 0, 119, 179)
         
         painter.end()
         return pixmap
