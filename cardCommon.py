@@ -135,7 +135,10 @@ class SpanishDeck(BaseDeck):
         self.cards = []
         for suit in SpanishCard.SPANISH_SUITS:
             for value in SpanishCard.SPANISH_VALUES:
+<<<<<<< HEAD
                 self.cards.append(SpanishCard(value, suit)) 
 
+=======
+>>>>>>> 1c3d0f88bcb12361b79fdc0f115cb8e043809d45
                 self.cards.append(SpanishCard(value, suit))
         return self.cards
