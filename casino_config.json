@@ -1,15 +1,15 @@
 {
   "display": {
-    "fullscreen": true,
+    "fullscreen": false,
     "resolution": [
-      1920,
-      1080
+      -1,
+      -1
     ],
     "vsync": true
   },
   "interface": {
-    "language": "en",
-    "animation_speed": 0.5,
+    "language": "es",
+    "animation_speed": 1.0,
     "show_tooltips": true,
     "card_animation_enabled": true,
     "sound_enabled": true
@@ -17,6 +17,6 @@
   "gameplay": {
     "auto_fold_timeout": 30,
     "confirm_actions": true,
-    "show_probability_hints": false
+    "show_probability_hints": true
   }
 }
