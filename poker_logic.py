@@ -7,7 +7,7 @@ separate from the UI implementation.
 import random
 from enum import Enum
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from collections import Counter
 
 from cardCommon import PokerDeck, PokerCard
@@ -95,6 +95,7 @@ class PokerTable:
         self.phase = GamePhase.WAITING
         self.min_raise = big_blind
         self.betting_round_complete = False
+        self.last_hand_results: List[Dict[str, Any]] = []
         
     def add_player(self, name: str, chips: int = 1000, is_human: bool = False) -> bool:
         """Add a player to the table. Returns True if successful."""
@@ -110,8 +111,8 @@ class PokerTable:
         )
         self.players.append(player)
         return True
-        
-    def fill_with_bots(self, target_players: int = None):
+
+    def fill_with_bots(self, target_players: Optional[int] = None):
         """Fill empty seats with bot players."""
         if target_players is None:
             target_players = min(self.MAX_PLAYERS, max(2, len(self.players) + 1))
@@ -124,6 +125,7 @@ class PokerTable:
     
     def start_new_hand(self):
         """Inicia una nueva mano de poker"""
+        self.last_hand_results = []
         if len([p for p in self.players if p.chips > 0]) < 2:
             self.phase = GamePhase.FINISHED
             return
@@ -268,35 +270,58 @@ class PokerTable:
         if len(active_players) == 1:
             # Only one player left - they win
             winner = active_players[0]
-            winner.chips += self.pot
+            winnings = self.pot
+            winner.chips += winnings
+            self.last_hand_results = [{
+                "player": winner,
+                "name": winner.name,
+                "amount": winnings
+            }]
             self.pot = 0
             self.phase = GamePhase.FINISHED
-            return
+            return self.last_hand_results
         
         # Evaluate hands and determine winners
         player_hands = []
+        showdown_map: Dict[int, Tuple[HandRanking, Tuple[int, ...]]] = {}
         for player in active_players:
-            hand_strength = self.evaluate_hand(player.hand + self.community_cards)
-            player_hands.append((player, hand_strength))
-        
+            ranking, tiebreakers = self.evaluate_hand(player.hand + self.community_cards)
+            key = tuple(tiebreakers)
+            showdown_map[player.position] = (ranking, key)
+            player_hands.append((player, ranking, key))
+
         # Sort by hand strength (higher is better)
-        player_hands.sort(key=lambda x: x[1], reverse=True)
-        
+        player_hands.sort(key=lambda x: (x[1].value, x[2]), reverse=True)
+
         # Find all players with the best hand (for ties)
-        best_strength = player_hands[0][1]
-        winners = [p for p, strength in player_hands if strength == best_strength]
+        best_ranking = player_hands[0][1]
+        best_tiebreakers = player_hands[0][2]
+        winners = [p for p, ranking, tiebreakers in player_hands if ranking == best_ranking and tiebreakers == best_tiebreakers]
         
         # Distribute pot
         pot_share = self.pot // len(winners)
         remainder = self.pot % len(winners)
         
+        results: List[Dict[str, Any]] = []
         for i, winner in enumerate(winners):
-            winner.chips += pot_share
+            winnings = pot_share
             if i < remainder:  # Distribute remainder to first winners
-                winner.chips += 1
+                winnings += 1
+            winner.chips += winnings
+            ranking_enum = showdown_map[winner.position][0]
+            results.append({
+                "player": winner,
+                "name": winner.name,
+                "amount": winnings,
+                "ranking": ranking_enum,
+                "ranking_name": self._hand_ranking_to_string(ranking_enum)
+            })
         
         self.pot = 0
         self.phase = GamePhase.FINISHED
+        self.last_hand_results = results
+        self._log_hand_scores(showdown_map=showdown_map, winners=winners)
+        return results
     
     def evaluate_hand(self, cards: List[PokerCard]) -> Tuple[HandRanking, List[int]]:
         """
@@ -467,7 +492,31 @@ class PokerTable:
         # Check if betting round is complete
         self._check_betting_round_complete()
         
+        if self.is_hand_over() and not self.last_hand_results:
+            self._finalize_uncontested_pot()
+
         return True
+
+    def _finalize_uncontested_pot(self):
+        """Award the pot to the remaining active player when everyone else folds."""
+        active_players = [p for p in self.players if not p.is_folded]
+        if len(active_players) != 1:
+            return
+
+        winner = active_players[0]
+        winnings = self.pot
+        winner.chips += winnings
+        self.pot = 0
+        self.phase = GamePhase.FINISHED
+        self.last_hand_results = [{
+            "player": winner,
+            "name": winner.name,
+            "amount": winnings,
+            "ranking": None,
+            "ranking_name": "Ganó sin mostrar mano"
+        }]
+        self.betting_round_complete = True
+        self._log_hand_scores(showdown_map=None, winners=[winner], note="Ganador por abandono")
     
     def _next_player(self):
         """Move to the next player who can act"""
@@ -513,6 +562,84 @@ class PokerTable:
         return (len(active_players) <= 1 or 
                 self.phase == GamePhase.FINISHED or
                 self.phase == GamePhase.SHOWDOWN)
+
+    def _hand_ranking_to_string(self, ranking: Optional[HandRanking]) -> str:
+        mapping = {
+            HandRanking.HIGH_CARD: "Carta alta",
+            HandRanking.ONE_PAIR: "Pareja",
+            HandRanking.TWO_PAIR: "Doble pareja",
+            HandRanking.THREE_OF_A_KIND: "Trío",
+            HandRanking.STRAIGHT: "Escalera",
+            HandRanking.FLUSH: "Color",
+            HandRanking.FULL_HOUSE: "Full House",
+            HandRanking.FOUR_OF_A_KIND: "Póker",
+            HandRanking.STRAIGHT_FLUSH: "Escalera de color",
+            HandRanking.ROYAL_FLUSH: "Escalera real"
+        }
+        if ranking is None:
+            return "Sin puntuación"
+        return mapping.get(ranking, ranking.name.replace('_', ' ').title())
+
+    def _cards_to_text(self, cards: List[PokerCard]) -> str:
+        if not cards:
+            return "-"
+        suit_symbols = {
+            'Corazones': '♥',
+            'Diamantes': '♦',
+            'Picas': '♠',
+            'Tréboles': '♣',
+            'Treboles': '♣'
+        }
+        parts: List[str] = []
+        for card in cards:
+            symbol = suit_symbols.get(card.suit, card.suit[:1])
+            parts.append(f"{card.value}{symbol}")
+        return " ".join(parts)
+
+    def _format_player_cards(self, player: Player) -> str:
+        return self._cards_to_text(player.hand)
+
+    def _log_hand_scores(
+        self,
+        showdown_map: Optional[Dict[int, Tuple[HandRanking, Tuple[int, ...]]]] = None,
+        winners: Optional[List[Player]] = None,
+        note: str = ""
+    ) -> None:
+        print("\n=== Resumen de la mano ===")
+        if note:
+            print(note)
+        community_text = self._cards_to_text(self.community_cards)
+        if community_text != "-":
+            print(f"Cartas comunitarias: {community_text}")
+
+        winners_positions = {p.position for p in winners} if winners else set()
+
+        for player in self.players:
+            status_parts = []
+            if player.position in winners_positions:
+                status_parts.append("Ganador")
+            if player.is_folded:
+                status_parts.append("Retirado")
+            elif player.is_all_in and not player.is_folded:
+                status_parts.append("All-in")
+            status = ", ".join(status_parts) if status_parts else "Activo"
+
+            ranking = None
+            if showdown_map and player.position in showdown_map:
+                ranking = showdown_map[player.position][0]
+            elif showdown_map is None and len(self.community_cards) == 5 and len(player.hand) >= 2:
+                try:
+                    ranking, _ = self.evaluate_hand(player.hand + self.community_cards)
+                except ValueError:
+                    ranking = None
+
+            ranking_text = self._hand_ranking_to_string(ranking)
+            print(
+                f"{player.name}: {status} | Cartas: {self._format_player_cards(player)} "
+                f"| Puntuación: {ranking_text} | Apuesta total: ${player.total_bet_in_hand}"
+            )
+
+        print("==========================\n")
     
     def get_bot_action(self, player_position: int) -> Tuple[PlayerAction, int]:
         """Get a bot action (simple random strategy for now)"""

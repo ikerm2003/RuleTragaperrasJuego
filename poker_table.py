@@ -4,7 +4,7 @@ Poker Table Base Module
 Defines the base table structure for Texas Hold'em supporting up to 9 players.
 Follows ABC pattern similar to the existing card system.
 """
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import List, Optional, Tuple
 from poker_logic import PokerTable, Player, GamePhase, PlayerAction
 
@@ -28,20 +28,17 @@ class BasePokerTable(PokerTable, ABC):
         if event in self._ui_callbacks:
             self._ui_callbacks[event](**kwargs)
     
-    @abstractmethod
     def update_display(self):
-        """Update the table display (implemented by UI classes)"""
-        pass
+        """Update the table display (implemented via UI callbacks)."""
+        self._notify_ui('update_display')
     
-    @abstractmethod
     def highlight_current_player(self, player_position: int):
-        """Highlight the current player (implemented by UI classes)"""
-        pass
+        """Highlight the current player (implemented via UI callbacks)."""
+        self._notify_ui('highlight_player', player_position=player_position)
     
-    @abstractmethod
     def show_action_buttons(self, player_position: int, actions: List[PlayerAction]):
-        """Show available action buttons (implemented by UI classes)"""
-        pass
+        """Show available action buttons (implemented via UI callbacks)."""
+        self._notify_ui('show_actions', player_position=player_position, actions=actions)
     
     def start_new_hand(self):
         """Override to add UI notifications"""
@@ -76,7 +73,7 @@ class BasePokerTable(PokerTable, ABC):
                     actions = self.get_valid_actions(self.current_player)
                     self.show_action_buttons(self.current_player, actions)
             else:
-                self._notify_ui('hand_ended')
+                self._notify_ui('hand_ended', results=self.last_hand_results)
         
         return success
 
@@ -246,18 +243,6 @@ class NinePlayerTable(BasePokerTable):
         import random
         self.dealer_position = random.randint(0, len(self.players) - 1)
     
-    def update_display(self):
-        """Base implementation - should be overridden by UI classes"""
-        pass
-    
-    def highlight_current_player(self, player_position: int):
-        """Base implementation - should be overridden by UI classes"""
-        pass
-    
-    def show_action_buttons(self, player_position: int, actions: List[PlayerAction]):
-        """Base implementation - should be overridden by UI classes"""
-        pass
-
 
 class PokerTableFactory:
     """Factory class for creating different types of poker tables"""

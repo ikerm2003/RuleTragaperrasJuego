@@ -4,7 +4,7 @@ PyQt6 UI Components for Texas Hold'em Poker
 This module contains the UI implementation for the poker game,
 separated from the game logic.
 """
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Callable
 from PyQt6.QtWidgets import (
     QApplication,
     QVBoxLayout,
@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QWidget,
     QMainWindow,
+    QMessageBox,
 )
 from PyQt6.QtGui import (
     QPixmap,
@@ -44,7 +45,6 @@ from PyQt6.QtCore import (
 from poker_table import NinePlayerTable, BasePokerTable
 from poker_logic import PlayerAction, GamePhase, Player
 from cardCommon import PokerCard
-from ui.base_table import BaseFourPlayerTable
 
 
 class PokerWindow(QMainWindow):
@@ -74,6 +74,8 @@ class PokerWindow(QMainWindow):
         self.action_buttons: List[QPushButton] = []
         self.pot_label: Optional[QLabel] = None
         self.phase_label: Optional[QLabel] = None
+        self.reveal_all_hands: bool = False
+        self.check_call_current_action: PlayerAction = PlayerAction.CHECK
         
         # Timer for bot actions
         self.bot_timer = QTimer()
@@ -83,6 +85,9 @@ class PokerWindow(QMainWindow):
         self.table.register_ui_callback('hand_started', self.on_hand_started)
         self.table.register_ui_callback('action_executed', self.on_action_executed)
         self.table.register_ui_callback('hand_ended', self.on_hand_ended)
+        self.table.register_ui_callback('update_display', lambda: self.update_display())
+        self.table.register_ui_callback('highlight_player', lambda player_position: self.highlight_current_player(player_position))
+        self.table.register_ui_callback('show_actions', lambda player_position, actions: self.show_action_buttons(player_position, actions))
         
         self.init_ui()
         self.start_new_game()
@@ -110,13 +115,13 @@ class PokerWindow(QMainWindow):
         info_frame.setFixedHeight(self.get_scaled_size(80))
         info_frame.setStyleSheet(self.get_info_bar_style())
         info_layout = QHBoxLayout(info_frame)
-        info_layout.setContentsMargins(20, 10, 20, 10)
+        info_layout.setContentsMargins(10, 10, 10, 10)
         
         # Pot display
         pot_container = QFrame()
         pot_layout = QVBoxLayout(pot_container)
         pot_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pot_layout.setSpacing(2)
+        pot_layout.setSpacing(1)
         
         pot_title = QLabel("POT")
         pot_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -136,7 +141,7 @@ class PokerWindow(QMainWindow):
         phase_container = QFrame()
         phase_layout = QVBoxLayout(phase_container)
         phase_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        phase_layout.setSpacing(2)
+        phase_layout.setSpacing(1)
         
         phase_title = QLabel("PHASE")
         phase_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -313,20 +318,23 @@ class PokerWindow(QMainWindow):
         action_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # Create action buttons (initially hidden)
-        self.fold_button = self.create_action_button("Fold", PlayerAction.FOLD)
-        self.check_call_button = self.create_action_button("Check", PlayerAction.CHECK)
-        self.raise_button = self.create_action_button("Raise", PlayerAction.RAISE)
+        self.fold_button = self.create_action_button("Fold", action=PlayerAction.FOLD)
+        self.check_call_button = self.create_action_button("Check", click_handler=self.on_check_call_clicked)
+        self.raise_button = self.create_action_button("Raise", action=PlayerAction.RAISE)
         
         # Raise amount controls
         self.raise_slider = QSlider(Qt.Orientation.Horizontal)
         self.raise_slider.setFixedWidth(self.get_scaled_size(200))
+        self.raise_slider.valueChanged.connect(self.on_raise_slider_changed)
         self.raise_amount_label = QLabel("$0")
         self.raise_amount_label.setFont(self.get_scaled_font(12, QFont.Weight.Bold))
         
         action_layout.addWidget(self.fold_button)
         action_layout.addWidget(self.check_call_button)
         action_layout.addWidget(self.raise_button)
-        action_layout.addWidget(QLabel("Amount:"))
+        self.raise_amount_title = QLabel("Amount:")
+        self.raise_amount_title.setFont(self.get_scaled_font(12, QFont.Weight.Bold))
+        action_layout.addWidget(self.raise_amount_title)
         action_layout.addWidget(self.raise_slider)
         action_layout.addWidget(self.raise_amount_label)
         
@@ -335,24 +343,39 @@ class PokerWindow(QMainWindow):
         self.new_hand_button.setFont(self.get_scaled_font(14, QFont.Weight.Bold))
         self.new_hand_button.clicked.connect(self.start_new_game)
         action_layout.addWidget(self.new_hand_button)
-        
-        # Initially hide action buttons
-        self.hide_action_buttons()
-        
+
         main_layout.addWidget(action_frame)
+
+        # Ocultar controles hasta que sea el turno del jugador humano
+        self.hide_action_buttons()
     
-    def create_action_button(self, text: str, action: PlayerAction) -> QPushButton:
+    def create_action_button(
+        self,
+        text: str,
+        action: Optional[PlayerAction] = None,
+        click_handler: Optional[Callable[[], None]] = None,
+    ) -> QPushButton:
         """Create a styled action button"""
         button = QPushButton(text)
         button.setFont(self.get_scaled_font(14, QFont.Weight.Bold))
         button.setFixedSize(self.get_scaled_size(120), self.get_scaled_size(45))
         button.setStyleSheet(self.get_button_style())
-        button.clicked.connect(lambda: self.execute_player_action(action))
+        if click_handler is not None:
+            button.clicked.connect(click_handler)
+        elif action is not None:
+            button.clicked.connect(lambda: self.execute_player_action(action))
         self.action_buttons.append(button)
         return button
+
+    def on_check_call_clicked(self):
+        action = getattr(self, "check_call_current_action", PlayerAction.CHECK)
+        self.execute_player_action(action)
     
     def start_new_game(self):
         """Start a new poker hand"""
+        self.bot_timer.stop()
+        self.reveal_all_hands = False
+        self.hide_action_buttons()
         self.table.start_new_hand()
     
     def execute_player_action(self, action: PlayerAction):
@@ -371,10 +394,7 @@ class PokerWindow(QMainWindow):
         success = self.table.execute_action(self.table.current_player, action, amount)
         if success:
             self.hide_action_buttons()
-            
-            # Handle bot actions after a delay
-            if not self.table.is_hand_over():
-                self.bot_timer.start(1000)  # 1 second delay
+            self.schedule_bot_action_if_needed()
     
     def handle_bot_action(self):
         """Handle bot player actions"""
@@ -394,61 +414,128 @@ class PokerWindow(QMainWindow):
         success = self.table.execute_action(self.table.current_player, action, amount)
         
         if success and not self.table.is_hand_over():
-            # Continue with next player after delay
-            self.bot_timer.start(1500)
+            self.schedule_bot_action_if_needed(delay=1500)
     
-    def show_available_actions(self):
-        """Show available action buttons for human player"""
-        if self.table.current_player >= len(self.table.players):
+    def show_available_actions(
+        self,
+        player_position: Optional[int] = None,
+        actions: Optional[List[PlayerAction]] = None,
+    ):
+        """Show available action buttons for the specified player (defaults to current)."""
+        if player_position is None:
+            player_position = self.table.current_player
+
+        if player_position >= len(self.table.players):
+            self.hide_action_buttons()
             return
-            
-        current_player = self.table.players[self.table.current_player]
+
+        current_player = self.table.players[player_position]
         if not current_player.is_human:
+            self.hide_action_buttons()
             return
-        
-        valid_actions = self.table.get_valid_actions(self.table.current_player)
-        
-        # Update button visibility and text
-        self.fold_button.setVisible(PlayerAction.FOLD in valid_actions)
-        
-        if PlayerAction.CHECK in valid_actions:
+
+        if actions is None:
+            actions = self.table.get_valid_actions(player_position)
+
+        if not actions:
+            self.hide_action_buttons()
+            return
+
+        # Fold button
+        can_fold = PlayerAction.FOLD in actions
+        self.fold_button.setVisible(can_fold)
+        self.fold_button.setEnabled(can_fold)
+
+        # Check / Call button
+        if PlayerAction.CHECK in actions:
             self.check_call_button.setText("Check")
             self.check_call_button.setVisible(True)
-        elif PlayerAction.CALL in valid_actions:
+            self.check_call_button.setEnabled(True)
+            self.check_call_current_action = PlayerAction.CHECK
+        elif PlayerAction.CALL in actions:
             call_amount = self.table.current_bet - current_player.current_bet
             self.check_call_button.setText(f"Call ${call_amount}")
             self.check_call_button.setVisible(True)
+            self.check_call_button.setEnabled(True)
+            self.check_call_current_action = PlayerAction.CALL
         else:
             self.check_call_button.setVisible(False)
-        
-        # Raise button and slider
-        if PlayerAction.RAISE in valid_actions:
-            self.raise_button.setVisible(True)
-            self.raise_slider.setVisible(True)
-            self.raise_amount_label.setVisible(True)
-            
-            # Set slider range
+            self.check_call_current_action = PlayerAction.CHECK
+
+        # Raise controls
+        can_raise = (PlayerAction.RAISE in actions) and (current_player.chips > 0)
+        if can_raise:
             min_raise = self.table.current_bet + self.table.min_raise
             max_raise = current_player.chips + current_player.current_bet
+            if min_raise > max_raise:
+                can_raise = False
+
+        if can_raise:
+            self.raise_button.setText("Raise")
+            self.raise_button.setVisible(True)
+            self.raise_button.setEnabled(True)
+            self.raise_slider.setVisible(True)
+            self.raise_slider.setEnabled(True)
+            self.raise_amount_title.setVisible(True)
+            self.raise_amount_title.setEnabled(True)
+            self.raise_amount_label.setVisible(True)
+            self.raise_amount_label.setEnabled(True)
+
             self.raise_slider.setRange(min_raise, max_raise)
             self.raise_slider.setValue(min_raise)
-            self.raise_amount_label.setText(f"${min_raise}")
-            
-            # Connect slider to label
-            self.raise_slider.valueChanged.connect(
-                lambda v: self.raise_amount_label.setText(f"${v}")
-            )
+            self.on_raise_slider_changed(min_raise)
         else:
             self.raise_button.setVisible(False)
+            self.raise_button.setEnabled(False)
             self.raise_slider.setVisible(False)
+            self.raise_slider.setEnabled(False)
+            self.raise_amount_title.setVisible(False)
+            self.raise_amount_title.setEnabled(False)
             self.raise_amount_label.setVisible(False)
+            self.raise_amount_label.setEnabled(False)
+
+    def show_action_buttons(self, player_position: int, actions: List[PlayerAction]):
+        """Callback bridge from the table to display available actions."""
+        self.show_available_actions(player_position, actions)
+
+    def highlight_current_player(self, player_position: int):
+        """Callback bridge to refresh highlighting for the current player."""
+        self.update_player_displays()
+        self.schedule_bot_action_if_needed()
+
+    def on_raise_slider_changed(self, value: int):
+        """Keep the raise amount label in sync with the slider."""
+        self.raise_amount_label.setText(f"${value}")
     
     def hide_action_buttons(self):
-        """Hide all action buttons"""
+        """Hide all action buttons and raise controls."""
         for button in self.action_buttons:
             button.setVisible(False)
+            button.setEnabled(False)
         self.raise_slider.setVisible(False)
+        self.raise_slider.setEnabled(False)
+        self.raise_amount_title.setVisible(False)
+        self.raise_amount_title.setEnabled(False)
         self.raise_amount_label.setVisible(False)
+        self.raise_amount_label.setEnabled(False)
+
+    def schedule_bot_action_if_needed(self, delay: int = 1000):
+        """Programar la acción del bot si el turno actual pertenece a un bot."""
+        if not self.table.players or self.table.is_hand_over():
+            self.bot_timer.stop()
+            return
+
+        if self.table.current_player >= len(self.table.players):
+            self.bot_timer.stop()
+            return
+
+        current_player = self.table.players[self.table.current_player]
+        if current_player.is_human:
+            self.bot_timer.stop()
+        else:
+            self.hide_action_buttons()
+            self.bot_timer.stop()
+            self.bot_timer.start(delay)
     
     def update_display(self):
         """Update all UI elements with current game state"""
@@ -496,15 +583,19 @@ class PokerWindow(QMainWindow):
                 else:
                     frame.setStyleSheet(self.get_player_frame_style())
                 
-                # Update cards for human player
-                if player.is_human and len(player.hand) >= 2:
-                    for j, card_label in enumerate(frame.card_labels):
-                        if j < len(player.hand):
-                            card = player.hand[j]
-                            pixmap = self.load_card_image(card)
-                            card_label.setPixmap(pixmap)
-                            card_label.setText("")
-                            card_label.setStyleSheet("")
+                # Update cards
+                reveal_cards = len(player.hand) >= 2 and (player.is_human or self.reveal_all_hands)
+                for j, card_label in enumerate(frame.card_labels):
+                    if reveal_cards and j < len(player.hand):
+                        card = player.hand[j]
+                        pixmap = self.load_card_image(card)
+                        card_label.setPixmap(pixmap)
+                        card_label.setText("")
+                        card_label.setStyleSheet("")
+                    else:
+                        card_label.setPixmap(QPixmap())
+                        card_label.setText("?")
+                        card_label.setStyleSheet(self.get_card_back_style())
     
     def load_card_image(self, card: PokerCard) -> QPixmap:
         """Create a visual representation of a card"""
@@ -562,16 +653,54 @@ class PokerWindow(QMainWindow):
     # Event callbacks
     def on_hand_started(self):
         """Called when a new hand starts"""
+        self.reveal_all_hands = False
         self.update_display()
+        self.schedule_bot_action_if_needed()
     
     def on_action_executed(self, player: int, action: PlayerAction, amount: int):
         """Called when an action is executed"""
         self.update_display()
+        self.schedule_bot_action_if_needed()
     
-    def on_hand_ended(self):
+    def on_hand_ended(self, results=None):
         """Called when a hand ends"""
+        self.bot_timer.stop()
+        self.reveal_all_hands = True
         self.update_display()
+        QApplication.processEvents()
         self.hide_action_buttons()
+
+        if results:
+            winner_lines = []
+            for info in results:
+                if isinstance(info, dict):
+                    name = info.get("name")
+                    player_obj = info.get("player")
+                    if not name and player_obj is not None:
+                        name = getattr(player_obj, "name", "Jugador")
+                    amount = info.get("amount", 0)
+                    ranking_name = info.get("ranking_name")
+                else:
+                    # Compatibilidad básica si llega otro tipo
+                    name = getattr(info, "name", "Jugador")
+                    amount = getattr(info, "amount", 0)
+                    ranking_name = getattr(info, "ranking_name", None)
+
+                if name is None:
+                    name = "Jugador"
+                if ranking_name:
+                    winner_lines.append(f"{name} gana ${amount} con {ranking_name}")
+                else:
+                    winner_lines.append(f"{name} gana ${amount}")
+
+            if len(winner_lines) == 1:
+                message = winner_lines[0]
+            else:
+                message = "El bote se repartió entre:\n- " + "\n- ".join(winner_lines)
+        else:
+            message = "La mano ha terminado."
+
+        QMessageBox.information(self, "Mano finalizada", message)
     
     # Styling methods
     def get_scaled_size(self, base_size: int) -> int:
