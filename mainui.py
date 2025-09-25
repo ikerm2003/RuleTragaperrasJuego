@@ -55,7 +55,6 @@ class MainUI(QMainWindow):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setStyleSheet("""
             color: #FFD700;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
             margin: 20px;
         """)
         main_layout.addWidget(title_label)
