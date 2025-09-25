@@ -45,6 +45,7 @@ from PyQt6.QtCore import (
 from poker_table import NinePlayerTable, BasePokerTable
 from poker_logic import PlayerAction, GamePhase, Player
 from cardCommon import PokerCard
+from config import config_manager, get_text
 
 
 class PokerWindow(QMainWindow):
@@ -56,13 +57,19 @@ class PokerWindow(QMainWindow):
     def __init__(self, table_type: str = "nine_player", num_players: int = 6):
         super().__init__()
         
+        # Initialize config system
+        self.config = config_manager
+        
         # Base dimensions for scaling
         self.base_width = 1400
         self.base_height = 900
         self.current_scale = 1.0
         
-        self.setWindowTitle("Texas Hold'em Poker")
+        self.setWindowTitle(get_text('poker') + " - " + get_text('casino_title'))
         self.setGeometry(100, 100, 1200, 800)
+        
+        # Apply initial display settings
+        self.apply_display_settings()
         
         # Initialize game table
         self.table = NinePlayerTable(small_blind=10, big_blind=20)
@@ -89,8 +96,68 @@ class PokerWindow(QMainWindow):
         self.table.register_ui_callback('highlight_player', lambda player_position: self.highlight_current_player(player_position))
         self.table.register_ui_callback('show_actions', lambda player_position, actions: self.show_action_buttons(player_position, actions))
         
+        self.create_menu_bar()
         self.init_ui()
         self.start_new_game()
+    
+    def create_menu_bar(self):
+        """Create menu bar with settings option"""
+        menubar = self.menuBar()
+        
+        # Game menu
+        game_menu = menubar.addMenu("Juego")
+        
+        new_hand_action = game_menu.addAction(get_text('new_hand'))
+        new_hand_action.triggered.connect(self.start_new_game)
+        
+        game_menu.addSeparator()
+        
+        exit_action = game_menu.addAction("Salir")
+        exit_action.triggered.connect(self.close)
+        
+        # Settings menu
+        settings_menu = menubar.addMenu(get_text('settings'))
+        
+        config_action = settings_menu.addAction("Configuración...")
+        config_action.triggered.connect(self.show_config_dialog)
+        
+    def show_config_dialog(self):
+        """Show configuration dialog"""
+        try:
+            from config_dialog import ConfigDialog
+            dialog = ConfigDialog(self)
+            dialog.config_changed.connect(self.apply_config_changes)
+            dialog.exec()
+        except ImportError:
+            QMessageBox.information(self, "Info", "Configuración no disponible en este momento.")
+    
+    def apply_config_changes(self):
+        """Apply configuration changes"""
+        self.apply_display_settings()
+        self.update_interface_language()
+        self.update_animation_settings()
+    
+    def apply_display_settings(self):
+        """Apply display settings from config"""
+        if self.config.is_fullscreen():
+            self.showFullScreen()
+        else:
+            self.showNormal()
+            resolution = self.config.get_resolution()
+            if resolution != (-1, -1):  # Not auto
+                self.resize(resolution[0], resolution[1])
+    
+    def update_interface_language(self):
+        """Update interface language"""
+        self.setWindowTitle(get_text('poker') + " - " + get_text('casino_title'))
+        # Update other text elements as needed
+        if hasattr(self, 'new_hand_button'):
+            self.new_hand_button.setText(get_text('new_hand'))
+    
+    def update_animation_settings(self):
+        """Update animation settings"""
+        # Animation settings will be applied to existing animation methods
+        pass
     
     def init_ui(self):
         """Initialize the main UI"""
@@ -123,7 +190,7 @@ class PokerWindow(QMainWindow):
         pot_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pot_layout.setSpacing(1)
         
-        pot_title = QLabel("POT")
+        pot_title = QLabel(get_text('pot'))
         pot_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pot_title.setFont(self.get_scaled_font(12, QFont.Weight.Bold))
         pot_title.setStyleSheet("color: #F59E0B; font-weight: bold;")
@@ -143,7 +210,7 @@ class PokerWindow(QMainWindow):
         phase_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         phase_layout.setSpacing(1)
         
-        phase_title = QLabel("PHASE")
+        phase_title = QLabel(get_text('phase'))
         phase_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         phase_title.setFont(self.get_scaled_font(12, QFont.Weight.Bold))
         phase_title.setStyleSheet("color: #10B981; font-weight: bold;")
@@ -189,7 +256,7 @@ class PokerWindow(QMainWindow):
         community_layout.setContentsMargins(15, 15, 15, 15)
         
         # Title
-        title = QLabel("Community Cards")
+        title = QLabel(get_text('community_cards'))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setFont(self.get_scaled_font(14, QFont.Weight.Bold))
         title.setStyleSheet("color: #F9FAFB; margin-bottom: 8px;")
@@ -296,10 +363,17 @@ class PokerWindow(QMainWindow):
         
         layout.addWidget(cards_frame)
         
-        # Current bet display
+        # Current bet display with better styling
         bet_label = QLabel("Bet: $0")
-        bet_label.setFont(self.get_scaled_font(11, QFont.Weight.Bold))
-        bet_label.setStyleSheet("color: #D1D5DB; text-align: center;")
+        bet_label.setFont(self.get_scaled_font(12, QFont.Weight.Bold))
+        bet_label.setStyleSheet("""
+            color: #FBBF24; 
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(251, 191, 36, 0.5);
+            border-radius: 8px;
+            padding: 4px 8px;
+            text-align: center;
+        """)
         bet_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         frame.bet_label = bet_label
         layout.addWidget(bet_label)
@@ -318,9 +392,9 @@ class PokerWindow(QMainWindow):
         action_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # Create action buttons (initially hidden)
-        self.fold_button = self.create_action_button("Fold", action=PlayerAction.FOLD)
-        self.check_call_button = self.create_action_button("Check", click_handler=self.on_check_call_clicked)
-        self.raise_button = self.create_action_button("Raise", action=PlayerAction.RAISE)
+        self.fold_button = self.create_action_button(get_text('fold'), action=PlayerAction.FOLD)
+        self.check_call_button = self.create_action_button(get_text('check'), click_handler=self.on_check_call_clicked)
+        self.raise_button = self.create_action_button(get_text('raise'), action=PlayerAction.RAISE)
         
         # Raise amount controls
         self.raise_slider = QSlider(Qt.Orientation.Horizontal)
@@ -332,14 +406,14 @@ class PokerWindow(QMainWindow):
         action_layout.addWidget(self.fold_button)
         action_layout.addWidget(self.check_call_button)
         action_layout.addWidget(self.raise_button)
-        self.raise_amount_title = QLabel("Amount:")
+        self.raise_amount_title = QLabel("Cantidad:")
         self.raise_amount_title.setFont(self.get_scaled_font(12, QFont.Weight.Bold))
         action_layout.addWidget(self.raise_amount_title)
         action_layout.addWidget(self.raise_slider)
         action_layout.addWidget(self.raise_amount_label)
         
         # New hand button
-        self.new_hand_button = QPushButton("New Hand")
+        self.new_hand_button = QPushButton(get_text('new_hand'))
         self.new_hand_button.setFont(self.get_scaled_font(14, QFont.Weight.Bold))
         self.new_hand_button.clicked.connect(self.start_new_game)
         action_layout.addWidget(self.new_hand_button)
@@ -500,8 +574,132 @@ class PokerWindow(QMainWindow):
 
     def highlight_current_player(self, player_position: int):
         """Callback bridge to refresh highlighting for the current player."""
+        self.animate_player_highlight(player_position)
         self.update_player_displays()
         self.schedule_bot_action_if_needed()
+    
+    def animate_bet_change(self, bet_label: QLabel):
+        """Animate bet label when amount changes"""
+        if not self.config.are_animations_enabled():
+            return
+            
+        if not hasattr(self, '_bet_animations'):
+            self._bet_animations = {}
+        
+        # Stop existing animation if any
+        if bet_label in self._bet_animations:
+            self._bet_animations[bet_label].stop()
+        
+        # Create scale animation
+        animation = QPropertyAnimation(bet_label, b"geometry")
+        duration = int(300 / self.config.get_animation_speed()) if self.config.get_animation_speed() > 0 else 300
+        animation.setDuration(duration)
+        animation.setEasingCurve(QEasingCurve.Type.OutBounce)
+        
+        original_geometry = bet_label.geometry()
+        expanded_geometry = QRect(
+            original_geometry.x() - 5,
+            original_geometry.y() - 2, 
+            original_geometry.width() + 10,
+            original_geometry.height() + 4
+        )
+        
+        animation.setStartValue(original_geometry)
+        animation.setKeyValueAt(0.5, expanded_geometry)
+        animation.setEndValue(original_geometry)
+        animation.finished.connect(lambda: self._bet_animations.pop(bet_label, None))
+        
+        self._bet_animations[bet_label] = animation
+        animation.start()
+        
+    def animate_player_highlight(self, player_position: int):
+        """Animate highlighting transition between players"""
+        if not self.config.are_animations_enabled():
+            return
+            
+        if not hasattr(self, '_highlight_animations'):
+            self._highlight_animations = {}
+        
+        # Stop all existing highlight animations
+        for anim in self._highlight_animations.values():
+            if anim.state() == QPropertyAnimation.State.Running:
+                anim.stop()
+        self._highlight_animations.clear()
+        
+        # Animate current player highlight
+        if player_position < len(self.player_displays):
+            frame = self.player_displays[player_position]
+            animation = QPropertyAnimation(frame, b"pos")
+            duration = int(200 / self.config.get_animation_speed()) if self.config.get_animation_speed() > 0 else 200
+            animation.setDuration(duration)
+            animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+            
+            original_pos = frame.pos()
+            lifted_pos = original_pos + frame.parent().mapFromGlobal(frame.mapToGlobal(original_pos)) - original_pos
+            lifted_pos.setY(lifted_pos.y() - 3)
+            
+            animation.setStartValue(original_pos)
+            animation.setKeyValueAt(0.5, lifted_pos)
+            animation.setEndValue(original_pos)
+            
+            self._highlight_animations[player_position] = animation
+            animation.start()
+    
+    def animate_card_deal(self, card_label: QLabel, delay: int = 0):
+        """Animate dealing a card"""
+        if not self.config.are_animations_enabled():
+            return
+            
+        if not hasattr(self, '_card_animations'):
+            self._card_animations = []
+        
+        # Start position (from deck)
+        start_pos = self.geometry().center()
+        end_pos = card_label.pos()
+        
+        # Create movement animation
+        animation = QPropertyAnimation(card_label, b"pos")
+        duration = int(400 / self.config.get_animation_speed()) if self.config.get_animation_speed() > 0 else 400
+        animation.setDuration(duration)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        animation.setStartValue(start_pos)
+        animation.setEndValue(end_pos)
+        
+        if delay > 0:
+            QTimer.singleShot(delay, animation.start)
+        else:
+            animation.start()
+        
+        self._card_animations.append(animation)
+        animation.finished.connect(lambda: self._card_animations.remove(animation) if animation in self._card_animations else None)
+        
+    def animate_pot_update(self):
+        """Animate pot value changes"""
+        if not self.config.are_animations_enabled() or not self.pot_label:
+            return
+            
+        if not hasattr(self, '_pot_animation'):
+            self._pot_animation = QPropertyAnimation(self.pot_label, b"geometry")
+        
+        if self._pot_animation.state() == QPropertyAnimation.State.Running:
+            self._pot_animation.stop()
+        
+        duration = int(250 / self.config.get_animation_speed()) if self.config.get_animation_speed() > 0 else 250
+        self._pot_animation.setDuration(duration)
+        self._pot_animation.setEasingCurve(QEasingCurve.Type.OutBounce)
+        
+        original_geometry = self.pot_label.geometry()
+        expanded_geometry = QRect(
+            original_geometry.x() - 10,
+            original_geometry.y() - 5,
+            original_geometry.width() + 20,
+            original_geometry.height() + 10
+        )
+        
+        self._pot_animation.setStartValue(original_geometry)
+        self._pot_animation.setKeyValueAt(0.5, expanded_geometry)
+        self._pot_animation.setEndValue(original_geometry)
+        self._pot_animation.start()
 
     def on_raise_slider_changed(self, value: int):
         """Keep the raise amount label in sync with the slider."""
@@ -539,13 +737,18 @@ class PokerWindow(QMainWindow):
     
     def update_display(self):
         """Update all UI elements with current game state"""
-        # Update pot and phase
+        # Update pot and phase with animations
         if self.pot_label:
-            self.pot_label.setText(f"${self.table.pot}")
+            old_pot_text = self.pot_label.text()
+            new_pot_text = f"${self.table.pot}"
+            if old_pot_text != new_pot_text:
+                self.pot_label.setText(new_pot_text)
+                self.animate_pot_update()
+            
         if self.phase_label:
             self.phase_label.setText(self.table.phase.value)
         
-        # Update community cards
+        # Update community cards with animations
         self.update_community_cards()
         
         # Update player displays
@@ -571,9 +774,27 @@ class PokerWindow(QMainWindow):
             if i < len(self.table.players):
                 player = self.table.players[i]
                 
-                # Update chips and bet
+                # Update chips and bet with enhanced display
                 frame.chips_label.setText(f"${player.chips}")
-                frame.bet_label.setText(f"Bet: ${player.current_bet}")
+                
+                # Enhanced bet display with total bet information
+                current_bet = player.current_bet
+                total_bet = getattr(player, 'total_bet_this_hand', current_bet)
+                
+                if current_bet > 0:
+                    if total_bet > current_bet:
+                        bet_text = f"Bet: ${current_bet} (Total: ${total_bet})"
+                    else:
+                        bet_text = f"Bet: ${current_bet}"
+                    
+                    # Add visual emphasis for new bets
+                    if hasattr(frame.bet_label, '_last_bet') and frame.bet_label._last_bet != current_bet:
+                        self.animate_bet_change(frame.bet_label)
+                    frame.bet_label._last_bet = current_bet
+                else:
+                    bet_text = "Bet: $0"
+                    
+                frame.bet_label.setText(bet_text)
                 
                 # Update player state styling
                 if i == self.table.current_player and not self.table.is_hand_over():
