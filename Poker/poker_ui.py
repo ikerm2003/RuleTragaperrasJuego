@@ -1,3 +1,5 @@
+from PyQt6.QtGui import QAction
+from PyQt6.QtWidgets import QMenu
 """
 PyQt6 UI Components for Texas Hold'em Poker
 
@@ -5,6 +7,7 @@ This module contains the UI implementation for the poker game,
 separated from the game logic.
 """
 from typing import List, Optional, Dict, Any, Callable
+from PyQt6.QtWidgets import QMenuBar
 from PyQt6.QtWidgets import (
     QApplication,
     QVBoxLayout,
@@ -102,24 +105,26 @@ class PokerWindow(QMainWindow):
     
     def create_menu_bar(self):
         """Create menu bar with settings option"""
-        menubar = self.menuBar()
+        menubar: QMenuBar = self.menuBar()
         
         # Game menu
-        game_menu = menubar.addMenu("Juego")
+        game_menu: QMenu = menubar.addMenu("Juego")
         
-        new_hand_action = game_menu.addAction(get_text('new_hand'))
+        new_hand_action: QAction = game_menu.addAction(get_text('new_hand'))
         new_hand_action.triggered.connect(self.start_new_game)
         
         game_menu.addSeparator()
         
-        exit_action = game_menu.addAction("Salir")
+        exit_action: QAction = game_menu.addAction("Salir")
         exit_action.triggered.connect(self.close)
         
         # Settings menu
-        settings_menu = menubar.addMenu(get_text('settings'))
-        
-        config_action = settings_menu.addAction("Configuración...")
+        settings_menu: QMenu = menubar.addMenu(get_text('settings'))
+
+        config_action: QAction = settings_menu.addAction("Configuración...")
         config_action.triggered.connect(self.show_config_dialog)
+        
+        self.setMenuBar(menubar)
         
     def show_config_dialog(self):
         """Show configuration dialog"""
@@ -133,6 +138,7 @@ class PokerWindow(QMainWindow):
     
     def apply_config_changes(self):
         """Apply configuration changes"""
+        print("Applying configuration changes...")
         self.apply_display_settings()
         self.update_interface_language()
         self.update_animation_settings()
