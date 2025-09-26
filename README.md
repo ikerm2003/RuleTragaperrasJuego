@@ -241,11 +241,11 @@ logging.basicConfig(level=logging.DEBUG)
 - [ ] **Efectos de sonido**: Sistema de audio completo
 
 ### 🎯 Mejoras Técnicas Planeadas
-- IA de bots más avanzada con múltiples personalidades
-- Sistema de hand history y replay
-- Soporte para variantes de poker (Omaha, Seven-Card Stud)
-- Optimizaciones de rendimiento y memoria
-- Soporte para más idiomas
+- [ ] IA de bots más avanzada con múltiples personalidades
+- [ ] Sistema de hand history y replay
+- [ ] Soporte para variantes de poker (Omaha, Seven-Card Stud)
+- [ ] Optimizaciones de rendimiento y memoria
+- [ ] Soporte para más idiomas
 
 ## 👨‍💻 Desarrollo y Contribución
 
