@@ -9,8 +9,14 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Dict, Any
 from collections import Counter
+import sys
+from pathlib import Path
 
-from ..cardCommon import PokerCard, PokerDeck
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from cardCommon import PokerCard, PokerDeck
 
 
 class GamePhase(Enum):

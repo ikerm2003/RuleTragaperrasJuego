@@ -6,7 +6,7 @@ Follows ABC pattern similar to the existing card system.
 """
 from abc import ABC
 from typing import List, Optional, Tuple
-from .poker_logic import PokerTable, Player, GamePhase, PlayerAction
+from poker_logic import PokerTable, Player, GamePhase, PlayerAction
 
 
 class BasePokerTable(PokerTable, ABC):

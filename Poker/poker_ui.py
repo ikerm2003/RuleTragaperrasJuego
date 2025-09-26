@@ -45,6 +45,13 @@ from PyQt6.QtCore import (
     pyqtSignal,
 )
 
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from poker_table import NinePlayerTable, BasePokerTable
 from poker_logic import PlayerAction, GamePhase, Player
 from cardCommon import PokerCard
@@ -57,8 +64,8 @@ class PokerWindow(QMainWindow):
     Inherits responsive scaling capabilities.
     """
     
-    def __init__(self, table_type: str = "nine_player", num_players: int = 6):
-        super().__init__()
+    def __init__(self, table_type: str = "nine_player", num_players: int = 6, parent: Optional[QWidget] = None):
+        super().__init__(parent)
         
         # Initialize config system
         self.config = config_manager

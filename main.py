@@ -1,17 +1,14 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import (QMainWindow, QApplication, QPushButton, QLabel, 
                              QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, 
-                             QGridLayout, QFrame, QMenuBar)
+                             QGridLayout, QFrame, QMenuBar, QMenu)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QPixmap, QIcon
 import sys
+import importlib
 
-try:
-    from .config import config_manager, get_text
-    from .config_dialog import ConfigDialog
-    CONFIG_AVAILABLE = True
-except ImportError:
-    CONFIG_AVAILABLE = False
+from config import config_manager, get_text  # type: ignore[import-not-found]
+from config_dialog import ConfigDialog  # type: ignore[import-not-found]
 
 
 class MainUI(QMainWindow):
@@ -19,18 +16,16 @@ class MainUI(QMainWindow):
         super().__init__()
         
         # Load config if available
-        if CONFIG_AVAILABLE:
-            self.config = config_manager
-            title = get_text('casino_title')
-        else:
-            self.config = None
-            title = "Casino de tu mama"
-            
+        self.config = config_manager
+        title = get_text('casino_title')
+
+        self._poker_window = None
+
         self.setWindowTitle(title)
         self.setGeometry(100, 100, 800, 600)
         
         # Apply display settings
-        if self.config and self.config.is_fullscreen():
+        if self.config.is_fullscreen():
             self.showFullScreen()
         
         self.init_ui()
@@ -50,7 +45,7 @@ class MainUI(QMainWindow):
         main_layout.setContentsMargins(50, 50, 50, 50)
         
         # Title
-        title_label = QLabel(get_text('casino_title') if CONFIG_AVAILABLE else "Casino de tu mama")
+        title_label = QLabel(get_text('casino_title'))
         title_label.setFont(QFont("Arial", 32, QFont.Weight.Bold))
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setStyleSheet("""
@@ -92,25 +87,30 @@ class MainUI(QMainWindow):
     def create_menu_bar(self):
         """Create menu bar"""
         menubar = self.menuBar()
+        if menubar is None:
+            return
         
         # Settings menu
-        if CONFIG_AVAILABLE:
-            settings_menu = menubar.addMenu(get_text('settings'))
+        settings_menu = menubar.addMenu(get_text('settings'))
+        if isinstance(settings_menu, QMenu):
             config_action = settings_menu.addAction("Configuración...")
-            config_action.triggered.connect(self.show_config_dialog)
+            if config_action is not None:
+                config_action.triggered.connect(self.show_config_dialog)
         
         # Help menu
         help_menu = menubar.addMenu("Ayuda")
-        about_action = help_menu.addAction("Acerca de...")
-        about_action.triggered.connect(self.show_about)
+        if isinstance(help_menu, QMenu):
+            about_action = help_menu.addAction("Acerca de...")
+            if about_action is not None:
+                about_action.triggered.connect(self.show_about)
     
     def create_game_buttons(self, layout):
         """Create game selection buttons"""
         games = [
-            ("poker", get_text('poker') if CONFIG_AVAILABLE else "Póker", self.launch_poker),
-            ("blackjack", get_text('blackjack') if CONFIG_AVAILABLE else "Blackjack", self.launch_blackjack),
-            ("roulette", get_text('roulette') if CONFIG_AVAILABLE else "Ruleta", self.launch_roulette),
-            ("slot_machine", get_text('slot_machine') if CONFIG_AVAILABLE else "Tragaperras", self.launch_slots),
+            ("poker", get_text('poker'), self.launch_poker),
+            ("blackjack", get_text('blackjack'), self.launch_blackjack),
+            ("roulette", get_text('roulette'), self.launch_roulette),
+            ("slot_machine", get_text('slot_machine'), self.launch_slots),
         ]
         
         for i, (game_id, game_name, handler) in enumerate(games):
@@ -152,27 +152,23 @@ class MainUI(QMainWindow):
     
     def show_config_dialog(self):
         """Show configuration dialog"""
-        if CONFIG_AVAILABLE:
-            dialog = ConfigDialog(self)
-            dialog.config_changed.connect(self.apply_config_changes)
-            dialog.exec()
-        else:
-            QMessageBox.information(self, "Info", "Configuración no disponible.")
+        dialog = ConfigDialog(self)
+        dialog.config_changed.connect(self.apply_config_changes)
+        dialog.exec()
     
     def apply_config_changes(self):
         """Apply configuration changes"""
-        if CONFIG_AVAILABLE:
-            # Update window title
-            self.setWindowTitle(get_text('casino_title'))
+        # Update window title
+        self.setWindowTitle(get_text('casino_title'))
             
-            # Apply display settings
-            if self.config.is_fullscreen():
-                self.showFullScreen()
-            else:
-                self.showNormal()
-                resolution = self.config.get_resolution()
-                if resolution != (-1, -1):
-                    self.resize(resolution[0], resolution[1])
+        # Apply display settings
+        if self.config.is_fullscreen():
+            self.showFullScreen()
+        else:
+            self.showNormal()
+            resolution = self.config.get_resolution()
+            if resolution != (-1, -1):
+                self.resize(resolution[0], resolution[1])
     
     def show_about(self):
         """Show about dialog"""
@@ -188,14 +184,29 @@ class MainUI(QMainWindow):
     def launch_poker(self):
         """Launch poker game"""
         try:
-            from .Poker.poker_main import main as poker_main
-            self.hide()  # Hide main window
-            poker_main()
-            self.show()  # Show main window when poker closes
+            poker_module = importlib.import_module("Poker.poker_main")
+            open_poker_window = getattr(poker_module, "open_poker_window")
+
+            self.hide()
+            window, owns_app, app = open_poker_window(num_players=6, parent=self)
+            self._poker_window = window
+            window.destroyed.connect(self.on_poker_window_closed)
+
+            if owns_app:
+                app.exec()
+
         except ImportError:
+            self.show()
             QMessageBox.warning(self, "Error", "El juego de póker no está disponible.")
         except Exception as e:
+            self.show()
+            print(e)
             QMessageBox.critical(self, "Error", f"Error al lanzar póker: {str(e)}")
+
+    def on_poker_window_closed(self, _obj=None):
+        """Restore main window when the poker window is closed."""
+        self._poker_window = None
+        self.show()
     
     def launch_blackjack(self):
         """Launch blackjack game"""
