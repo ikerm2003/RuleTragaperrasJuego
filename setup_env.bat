@@ -13,7 +13,7 @@ if not exist ".venv" (
 )
 
 echo Activando entorno virtual...
-call .venv\Scripts\activate
+call .venv\Scripts\activate.bat
 
 if %ERRORLEVEL% neq 0 (
     echo ERROR: No se pudo activar el entorno virtual
@@ -45,6 +45,6 @@ echo   2. Modulo Poker: python Poker\poker_main.py
 echo   3. Modulo Blackjack: python Blackjack\blackjack.py
 echo.
 echo NOTA: Asegurate de tener el entorno virtual activado
-echo      ejecutando: .venv\Scripts\activate
+echo      ejecutando: .venv\Scripts\activate.bat
 echo.
 pause
