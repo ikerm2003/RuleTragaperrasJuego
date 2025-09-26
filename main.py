@@ -7,8 +7,8 @@ from PyQt6.QtGui import QFont, QPixmap, QIcon
 import sys
 
 try:
-    from config import config_manager, get_text
-    from config_dialog import ConfigDialog
+    from .config import config_manager, get_text
+    from .config_dialog import ConfigDialog
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -188,7 +188,7 @@ class MainUI(QMainWindow):
     def launch_poker(self):
         """Launch poker game"""
         try:
-            from poker_main import main as poker_main
+            from .Poker.poker_main import main as poker_main
             self.hide()  # Hide main window
             poker_main()
             self.show()  # Show main window when poker closes

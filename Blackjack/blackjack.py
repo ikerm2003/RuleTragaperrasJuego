@@ -2,12 +2,12 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHB
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
 from PyQt6.QtCore import Qt
 
-from mainui import MainUI
+from ..main import MainUI
 import sys
 import os
 import random
 
-from cardGamesCommon import BaseCard, BaseDeck
+from ..cardCommon import BaseCard, BaseDeck
     
 class BlackjackGame:
     def __init__(self):

@@ -5,8 +5,7 @@ UI components for the slot machine game using PyQt6
 from PyQt6.QtWidgets import QMainWindow, QMenuBar, QMenu
 from PyQt6.QtCore import Qt
 
-from config_manager import ConfigManager
-from localization import get_text
+from ..config import ConfigManager
 
 class SlotMachineUI(QMainWindow):
     def __init__(self):

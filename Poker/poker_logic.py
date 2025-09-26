@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple, Dict, Any
 from collections import Counter
 
+from ..cardCommon import PokerCard, PokerDeck
+
 
 class GamePhase(Enum):
     """GamePhase enumerates the sequential phases of a standard Texas Hold'em hand.
@@ -80,7 +82,7 @@ class Player:
     name: str
     chips: int
     position: int
-    hand: List[PokerCard] = None
+    hand: List[PokerCard] = None #type: ignore
     current_bet: int = 0
     total_bet_in_hand: int = 0
     is_active: bool = True
@@ -134,70 +136,6 @@ class HandRanking(Enum):
     FOUR_OF_A_KIND = 8
     STRAIGHT_FLUSH = 9
     ROYAL_FLUSH = 10
-
-
-class PokerCard:
-    """Represents a standard playing card in a poker deck."""
-    SUITS = ['Corazones', 'Diamantes', 'Picas', 'Tréboles']
-    VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
-
-    def __init__(self, suit: str, value: str):
-        if suit not in self.SUITS:
-            raise ValueError(f"Invalid suit: {suit}")
-        if value not in self.VALUES:
-            raise ValueError(f"Invalid value: {value}")
-        self.suit = suit
-        self.value = value
-
-    def __repr__(self):
-        return f"{self.value} de {self.suit}"
-
-    def get_numeric_value(self) -> int:
-        """Get the numeric value of the card for comparison (2-14)
-
-        Returns:
-            int: Numeric value range(2,14)"""
-        return self.VALUES.index(self.value) + 2  # 2-14
-
-
-class PokerDeck:
-    """Represents a deck of standard playing cards used in poker.
-    """
-    def __init__(self):
-        self.cards = [PokerCard(suit, value)
-                      for suit in PokerCard.SUITS for value in PokerCard.VALUES]
-        self.shuffle()
-
-    def shuffle(self) -> List[PokerCard]:
-        """Shuffle the deck of cards.
-
-        Returns:
-            List[PokerCard]: Shuffled list of cards
-
-        Notes:
-            - Uses random.shuffle for in-place shuffling.
-            - Returns the shuffled deck for convenience, cards are just shuffled in place.
-        """
-        random.shuffle(self.cards)
-        return self.cards
-
-    def deal(self, num: int) -> List[PokerCard]:
-        """Deal a number of cards from the deck.
-
-        Args:
-            num (int): Number of cards to deal
-
-        Returns:
-            List[PokerCard]: List of dealt cards
-
-        Raises:
-            ValueError: If not enough cards remain in the deck
-        """
-        if num > len(self.cards):
-            raise ValueError("Not enough cards in the deck to deal")
-        dealt_cards = self.cards[:num]
-        self.cards = self.cards[num:]
-        return dealt_cards
 
 
 class PokerTable:
