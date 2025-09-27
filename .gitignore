@@ -10,6 +10,7 @@ venv/
 .venv/
 pip-log.txt
 pip-delete-this-directory.txt
+pyrefly.toml
 .tox/
 .coverage
 .coverage.*
