@@ -34,6 +34,7 @@ from PyQt6.QtGui import (
     QBrush,
     QPen,
     QFontMetrics,
+    QResizeEvent,
 )
 from PyQt6.QtCore import (
     Qt,
@@ -192,10 +193,9 @@ class PokerWindow(QMainWindow):
     def create_info_bar(self, main_layout: QVBoxLayout):
         """Create the info bar showing pot, phase, etc."""
         info_frame = QFrame()
-        info_frame.setFixedHeight(self.get_scaled_size(80))
+        info_frame.setFixedHeight(self.get_scaled_size(130))
         info_frame.setStyleSheet(self.get_info_bar_style())
         info_layout = QHBoxLayout(info_frame)
-        info_layout.setContentsMargins(10, 10, 10, 10)
         
         # Pot display
         pot_container = QFrame()
@@ -249,6 +249,10 @@ class PokerWindow(QMainWindow):
         self.table_layout = QGridLayout(table_frame)
         self.table_layout.setSpacing(self.get_scaled_size(20))
         self.table_layout.setContentsMargins(40, 40, 40, 40)
+        for row in range(5):
+            self.table_layout.setRowStretch(row, 1)
+        for col in range(3):
+            self.table_layout.setColumnStretch(col, 1)
         
         # Create community cards area
         self.create_community_cards_section()
@@ -478,10 +482,15 @@ class PokerWindow(QMainWindow):
         if action == PlayerAction.RAISE:
             amount = self.raise_slider.value()
         
+        # Evita dobles clics mientras se procesa la acción
+        self.hide_action_buttons()
+
         success = self.table.execute_action(self.table.current_player, action, amount)
         if success:
-            self.hide_action_buttons()
             self.schedule_bot_action_if_needed()
+        else:
+            # Si la acción no fue válida, vuelve a mostrar las opciones disponibles
+            self.show_available_actions(self.table.current_player)
     
     def handle_bot_action(self):
         """Handle bot player actions"""
@@ -620,7 +629,7 @@ class PokerWindow(QMainWindow):
         animation.setStartValue(original_geometry)
         animation.setKeyValueAt(0.5, expanded_geometry)
         animation.setEndValue(original_geometry)
-        animation.finished.connect(lambda: self._bet_animations.pop(bet_label, None))
+        animation.finished.connect(lambda: self._bet_animations.pop(bet_label, None))  # type: ignore[attr-defined]
         
         self._bet_animations[bet_label] = animation
         animation.start()
@@ -684,7 +693,7 @@ class PokerWindow(QMainWindow):
             animation.start()
         
         self._card_animations.append(animation)
-        animation.finished.connect(lambda: self._card_animations.remove(animation) if animation in self._card_animations else None)
+        animation.finished.connect(lambda: self._card_animations.remove(animation) if animation in self._card_animations else None)  # type: ignore[attr-defined]
         
     def animate_pot_update(self):
         """Animate pot value changes"""
@@ -702,6 +711,8 @@ class PokerWindow(QMainWindow):
         self._pot_animation.setEasingCurve(QEasingCurve.Type.OutBounce)
         
         original_geometry = self.pot_label.geometry()
+        if original_geometry.width() == 0 or original_geometry.height() == 0:
+            return
         expanded_geometry = QRect(
             original_geometry.x() - 10,
             original_geometry.y() - 5,
@@ -957,7 +968,7 @@ class PokerWindow(QMainWindow):
                            stop:0 rgba(17, 24, 39, 0.95),
                            stop:1 rgba(31, 41, 55, 0.95));
                 border: 2px solid rgba(75, 85, 99, 0.6);
-                border-radius: 12px;
+                border-radius: 10px;
             }
         """
     
@@ -1057,7 +1068,7 @@ class PokerWindow(QMainWindow):
             }
         """
     
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: QResizeEvent):  # type: ignore[override]
         """Handle window resize for responsive scaling"""
         super().resizeEvent(event)
         current_size = self.size()

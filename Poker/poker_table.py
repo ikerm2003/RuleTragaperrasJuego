@@ -169,7 +169,7 @@ class NinePlayerTable(BasePokerTable):
             5: [
                 (3, 1, "bottom"),    # 0
                 (3, 0, "bottom-left"), # 1
-                (1, 0, "top-left"),  # 2
+                (0, 0, "top-left"),  # 2
                 (1, 2, "top-right"), # 3
                 (3, 2, "bottom-right") # 4
             ],
@@ -185,7 +185,7 @@ class NinePlayerTable(BasePokerTable):
                 (3, 1, "bottom"),    # 0
                 (3, 0, "bottom-left"), # 1
                 (2, 0, "left"),      # 2
-                (1, 0, "top-left"),  # 3
+                (0, 0, "top-left"),  # 3
                 (1, 2, "top-right"), # 4
                 (2, 2, "right"),     # 5
                 (3, 2, "bottom-right") # 6
@@ -194,7 +194,7 @@ class NinePlayerTable(BasePokerTable):
                 (3, 1, "bottom"),    # 0
                 (3, 0, "bottom-left"), # 1
                 (2, 0, "left"),      # 2
-                (1, 0, "top-left"),  # 3
+                (0, 0, "top-left"),  # 3
                 (1, 1, "top"),       # 4
                 (1, 2, "top-right"), # 5
                 (2, 2, "right"),     # 6
@@ -204,7 +204,7 @@ class NinePlayerTable(BasePokerTable):
                 (4, 1, "bottom"),    # 0
                 (3, 0, "bottom-left"), # 1
                 (2, 0, "left"),      # 2
-                (1, 0, "top-left"),  # 3
+                (0, 0, "top-left"),  # 3
                 (1, 1, "top"),       # 4
                 (1, 2, "top-right"), # 5
                 (2, 2, "right"),     # 6
