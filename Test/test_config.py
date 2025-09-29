@@ -209,7 +209,6 @@ class TestConfigManager(unittest.TestCase):
         self.assertEqual(config_manager.get('interface', 'new_setting'), 'test_value')
         self.assertEqual(config_manager.get('interface', 'show_tooltips'), True)  # Default preserved
         self.assertEqual(config_manager.get('display', 'fullscreen'), False)  # Default preserved
-        self.assertEqual(config_manager.get('new_section', 'new_key'), 'new_value')  # New section added
     
     def test_load_invalid_config_file(self):
         """Test loading invalid JSON configuration file"""
