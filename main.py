@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+"""
+Aplicación principal del Casino RuleTragaperrasJuego
+
+Este módulo contiene la interfaz principal de usuario que permite acceder
+a todos los juegos de casino disponibles: Poker, Blackjack, Ruleta y Tragaperras.
+Gestiona la navegación entre juegos y la configuración general de la aplicación.
+"""
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import (QMainWindow, QApplication, QPushButton, QLabel, 
                              QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, 
