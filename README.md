@@ -273,13 +273,48 @@ logging.basicConfig(level=logging.DEBUG)
 - [ ] **Modo torneo**: Soporte para torneos multi-mesa
 - [ ] **Temas personalizables**: Múltiples temas visuales
 - [ ] **Efectos de sonido**: Sistema de audio completo
+- [ ] **Sistema de achievements**: Logros y trofeos desbloqueables
+- [ ] **Modo práctica**: Juego sin dinero para aprendizaje
+- [ ] **Más animaciones**: Card flips, chip movements, efectos avanzados
 
 ### 🎯 Mejoras Técnicas Planeadas
-- [ ] IA de bots más avanzada con múltiples personalidades
-- [ ] Sistema de hand history y replay
-- [ ] Soporte para variantes de poker (Omaha, Seven-Card Stud)
-- [ ] Optimizaciones de rendimiento y memoria
-- [ ] Soporte para más idiomas
+- [ ] **IA avanzada**: Bots con múltiples personalidades y estrategias adaptativas
+- [ ] **Hand history**: Sistema de historial y replay de manos
+- [ ] **Variantes de poker**: Omaha, Seven-Card Stud, etc.
+- [ ] **Optimizaciones**: Mejoras de rendimiento y uso de memoria
+- [ ] **Más idiomas**: Soporte adicional más allá de Español/Inglés
+- [ ] **Sistema de logs**: Logging mejorado para debugging y análisis
+- [ ] **Testing automatizado**: CI/CD con tests automáticos
+- [ ] **Persistencia de datos**: Sistema de guardado de progreso y perfil de usuario
+- [ ] **Análisis de patrones**: Sistema de análisis de comportamiento de jugadores
+- [ ] **Blackjack completo**: Finalizar implementación con dealer AI, splits, y doubles
+
+### 📝 Guía de Implementación Óptima
+
+Para implementar las características planeadas de manera eficiente:
+
+#### 🏗️ Arquitectura y Diseño
+- **Modularidad**: Mantener separación estricta entre lógica, UI y gestión de estado
+- **Reutilización**: Aprovechar componentes existentes (ej: sistema de configuración)
+- **Escalabilidad**: Diseñar para soportar extensiones futuras sin refactoring mayor
+- **Testing First**: Escribir tests antes de implementar nuevas características
+
+#### ⚡ Optimización y Rendimiento
+- **Lazy Loading**: Cargar módulos y recursos solo cuando se necesiten
+- **Caching**: Cachear resultados de cálculos costosos (ej: evaluación de manos)
+- **Async Operations**: Usar operaciones asíncronas para UI responsiva
+- **Memory Management**: Liberar recursos no utilizados, especialmente en cambios de juego
+
+#### 🎯 Priorización Sugerida
+1. **Alta prioridad**: Completar Blackjack y Ruleta (completar juegos base)
+2. **Media prioridad**: Sistema de estadísticas, hand history, efectos de sonido
+3. **Baja prioridad**: Multiplayer online, torneos, variantes de poker avanzadas
+
+#### 🔧 Mejores Prácticas
+- **Documentación**: Mantener README.md y docstrings actualizados
+- **Commits atómicos**: Un feature/fix por commit con mensajes descriptivos
+- **Code review**: Revisar cambios antes de merge
+- **Backwards compatibility**: Mantener compatibilidad con código existente
 
 ## 👨‍💻 Desarrollo y Contribución
 

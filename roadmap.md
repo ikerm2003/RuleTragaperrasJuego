@@ -28,3 +28,7 @@ Aqui se encuentra la lista de objetivos de la aplicación.
 * [ ] **Hand history** - Sistema de historial y replay de manos
 * [ ] **Variantes de poker** - Omaha, Seven-Card Stud, etc.
 * [ ] **Optimizaciones** - Mejoras de rendimiento y memoria
+* [ ] **Más animaciones** - Card flips, chip movements, efectos avanzados
+* [ ] **Más idiomas** - Soporte adicional más allá de Español/Inglés
+* [ ] **Sistema de achievements** - Logros y trofeos desbloqueables
+* [ ] **Modo práctica** - Juego sin dinero para aprendizaje
