@@ -28,6 +28,7 @@ class MainUI(QMainWindow):
         title = get_text('casino_title')
 
         self._poker_window = None
+        self._slots_window = None
 
         self.setWindowTitle(title)
         self.setGeometry(100, 100, 800, 600)
@@ -226,7 +227,30 @@ class MainUI(QMainWindow):
     
     def launch_slots(self):
         """Launch slot machine game"""
-        QMessageBox.information(self, "Próximamente", "Las tragaperras estarán disponibles próximamente.")
+        try:
+            slots_module = importlib.import_module("Tragaperras.tragaperras_main")
+            open_slot_window = getattr(slots_module, "open_slot_window")
+
+            self.hide()
+            window, owns_app, app = open_slot_window(parent=self)
+            self._slots_window = window
+            window.destroyed.connect(self.on_slots_window_closed)
+
+            if owns_app:
+                app.exec()
+
+        except ImportError:
+            self.show()
+            QMessageBox.warning(self, "Error", "El juego de tragaperras no está disponible.")
+        except Exception as e:
+            self.show()
+            print(e)
+            QMessageBox.critical(self, "Error", f"Error al lanzar tragaperras: {str(e)}")
+
+    def on_slots_window_closed(self, _obj=None):
+        """Restore main window when slot machine window is closed."""
+        self._slots_window = None
+        self.show()
 
 
 if __name__ == "__main__":
