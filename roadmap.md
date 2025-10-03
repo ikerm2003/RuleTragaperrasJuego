@@ -27,8 +27,8 @@ Aqui se encuentra la lista de objetivos de la aplicación.
 * [ ] **IA avanzada** - Bots con múltiples personalidades y estrategias
 * [ ] **Hand history** - Sistema de historial y replay de manos
 * [ ] **Variantes de poker** - Omaha, Seven-Card Stud, etc.
-* [ ] **Optimizaciones** - Mejoras de rendimiento y memoria
-* [ ] **Más animaciones** - Card flips, chip movements, efectos avanzados
+* [x] **Optimizaciones** - Mejoras de rendimiento y memoria
+* [x] **Más animaciones** - Card flips, chip movements, efectos avanzados
 * [x] **Más idiomas** - Soporte adicional más allá de Español/Inglés
 * [x] **Sistema de achievements** - Logros y trofeos desbloqueables
 * [x] **Modo práctica** - Juego sin dinero para aprendizaje
