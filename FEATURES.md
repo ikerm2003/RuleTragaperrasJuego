@@ -69,7 +69,26 @@ El `ConfigManager` centraliza preferencias de pantalla, interfaz y jugabilidad, 
 - Ajustes de pantalla: fullscreen y resoluciones predefinidas.
 - Preferencias de interfaz: idioma, velocidad de animación, tooltips, sonido.
 - Parámetros de juego: tiempo de auto-fold, confirmaciones y hints.
+- Sistema de recarga diaria: auto-refill de balance configurable.
 - API de acceso sencillo (`config_manager.get(...)`, `set(...)`, `save_config()`).
+
+## ⌨️ Keyboard Shortcuts
+
+Sistema completo de atajos de teclado para navegación rápida:
+
+- **Menú principal**: Teclas 1-4 para lanzar juegos, F11 para fullscreen, ESC para salir.
+- **Integración global**: Los atajos están disponibles en toda la aplicación.
+- **Configuración rápida**: Ctrl+S para acceder a configuración.
+- **Indicadores visuales**: Los botones muestran los atajos asociados.
+
+## 💰 Daily Auto-Refill System
+
+Sistema automático de recarga de balance diario:
+
+- **Auto-refill inteligente**: Detecta nuevo día y recarga si el balance está bajo.
+- **Balance configurable**: Starting balance de 1000 créditos por defecto.
+- **Notificaciones**: Mensajes informativos cuando ocurre la recarga.
+- **Persistencia**: El sistema guarda último login y balance en `casino_config.json`.
 
 ## � Internationalization
 

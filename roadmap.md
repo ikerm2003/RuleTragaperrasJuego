@@ -15,8 +15,8 @@ Aqui se encuentra la lista de objetivos de la aplicación.
 * [x] **Sistema de Configuración** - Completo con soporte multi-idioma y preferencias
 * [ ] **Multiplayer** - Soporte para juego en red
 * [ ] **Misiones diarias** - Sistema de misiones y recompensas
-* [ ] **Autorefill al dia del dinero** - Recarga automática diaria
-* [ ] **Atajos de teclado** - Controles de teclado completos
+* [x] **Autorefill al dia del dinero** - Recarga automática diaria
+* [x] **Atajos de teclado** - Controles de teclado completos
 
 ## 🚀 Mejoras Futuras
 

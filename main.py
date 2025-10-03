@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (QMainWindow, QApplication, QPushButton, QLabel,
                              QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, 
                              QGridLayout, QFrame, QMenuBar, QMenu)
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QPixmap, QIcon
+from PyQt6.QtGui import QFont, QPixmap, QIcon, QKeySequence, QShortcut
 import sys
 import importlib
 
@@ -40,6 +40,10 @@ class MainUI(QMainWindow):
             self.showFullScreen()
         
         self.init_ui()
+        self.setup_shortcuts()
+        
+        # Check for daily refill
+        self.check_daily_refill()
     
     def init_ui(self):
         """Initialize the main UI"""
@@ -95,6 +99,47 @@ class MainUI(QMainWindow):
             }
         """)
     
+    def setup_shortcuts(self):
+        """Setup keyboard shortcuts for the main menu"""
+        # Number keys for launching games
+        QShortcut(QKeySequence("1"), self).activated.connect(self.launch_poker)
+        QShortcut(QKeySequence("2"), self).activated.connect(self.launch_blackjack)
+        QShortcut(QKeySequence("3"), self).activated.connect(self.launch_roulette)
+        QShortcut(QKeySequence("4"), self).activated.connect(self.launch_slots)
+        
+        # F11 for fullscreen toggle
+        QShortcut(QKeySequence("F11"), self).activated.connect(self.toggle_fullscreen)
+        
+        # Escape to quit
+        QShortcut(QKeySequence("Esc"), self).activated.connect(self.close)
+        
+        # Ctrl+Q to quit
+        QShortcut(QKeySequence("Ctrl+Q"), self).activated.connect(self.close)
+        
+        # Ctrl+S for settings
+        QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self.show_config_dialog)
+    
+    def toggle_fullscreen(self):
+        """Toggle fullscreen mode"""
+        if self.isFullScreen():
+            self.showNormal()
+            self.config.set('display', 'fullscreen', False)
+        else:
+            self.showFullScreen()
+            self.config.set('display', 'fullscreen', True)
+        self.config.save_config()
+    
+    def check_daily_refill(self):
+        """Check and apply daily refill if applicable"""
+        if self.config.check_daily_refill():
+            balance = self.config.get_player_balance()
+            message = get_text('daily_refill_message').format(balance=balance)
+            QMessageBox.information(
+                self,
+                get_text('daily_refill_title'),
+                message
+            )
+    
     def create_menu_bar(self):
         """Create menu bar"""
         menubar = self.menuBar()
@@ -118,10 +163,10 @@ class MainUI(QMainWindow):
     def create_game_buttons(self, layout):
         """Create game selection buttons"""
         games = [
-            ("poker", get_text('poker'), self.launch_poker),
-            ("blackjack", get_text('blackjack'), self.launch_blackjack),
-            ("roulette", get_text('roulette'), self.launch_roulette),
-            ("slot_machine", get_text('slot_machine'), self.launch_slots),
+            ("poker", f"{get_text('poker')} (1)", self.launch_poker),
+            ("blackjack", f"{get_text('blackjack')} (2)", self.launch_blackjack),
+            ("roulette", f"{get_text('roulette')} (3)", self.launch_roulette),
+            ("slot_machine", f"{get_text('slot_machine')} (4)", self.launch_slots),
         ]
         
         for i, (game_id, game_name, handler) in enumerate(games):
@@ -183,14 +228,17 @@ class MainUI(QMainWindow):
     
     def show_about(self):
         """Show about dialog"""
+        shortcuts_help = get_text('shortcuts_help')
         QMessageBox.about(self, "Acerca de", 
-                         "Casino de tu mama\n\n"
-                         "Un juego de casino con múltiples juegos:\n"
-                         "• Póker Texas Hold'em\n"
-                         "• Blackjack\n"
-                         "• Ruleta\n"
-                         "• Tragaperras\n\n"
-                         "Versión 2.0")
+                         f"Casino de tu mama\n\n"
+                         f"Un juego de casino con múltiples juegos:\n"
+                         f"• Póker Texas Hold'em\n"
+                         f"• Blackjack\n"
+                         f"• Ruleta\n"
+                         f"• Tragaperras\n\n"
+                         f"Versión 2.0\n\n"
+                         f"{get_text('keyboard_shortcuts')}:\n"
+                         f"{shortcuts_help}")
     
     def launch_poker(self):
         """Launch poker game"""

@@ -186,6 +186,30 @@ RuleTragaperrasJuego/
 - **Idiomas**: Soporte para Español e Inglés
 - **Animaciones**: Velocidad configurable o desactivación
 - **Configuración de juego**: Timeouts, confirmaciones, hints de probabilidad
+- **Recarga diaria automática**: Sistema de auto-refill de balance diario
+- **Atajos de teclado**: Controles rápidos para navegación
+
+### ⌨️ Atajos de Teclado
+
+El sistema incluye atajos de teclado completos para una experiencia más fluida:
+
+**Menú Principal:**
+- `1` - Lanzar Póker
+- `2` - Lanzar Blackjack
+- `3` - Lanzar Ruleta
+- `4` - Lanzar Tragaperras
+- `F11` - Alternar pantalla completa
+- `Ctrl+S` - Abrir configuración
+- `ESC` o `Ctrl+Q` - Salir de la aplicación
+
+### 💰 Sistema de Recarga Diaria
+
+El juego incluye un sistema automático de recarga de balance:
+
+- **Recarga automática**: Si tu balance está por debajo del inicial, se recargará automáticamente al día siguiente
+- **Balance inicial**: 1000 créditos (configurable)
+- **Notificación**: Recibirás un mensaje cuando se realice la recarga
+- **Configurable**: Puedes activar/desactivar esta función en la configuración
 
 ### 🎨 Características de UI
 

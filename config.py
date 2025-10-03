@@ -4,8 +4,10 @@ Handles settings for UI, animations, language, and display options.
 """
 import json
 import os
+import copy
 from typing import Dict, Any, Optional
 from enum import Enum
+from datetime import datetime
 
 class Language(Enum):
     ENGLISH = "en"
@@ -43,12 +45,18 @@ class ConfigManager:
             'auto_fold_timeout': 30,
             'confirm_actions': True,
             'show_probability_hints': False,
+            'starting_balance': 1000,
+            'daily_refill_enabled': True,
+        },
+        'player': {
+            'last_login': None,
+            'current_balance': 1000,
         }
     }
     
     def __init__(self, config_file: str = 'casino_config.json'):
         self.config_file = config_file
-        self.config = self.DEFAULT_CONFIG.copy()
+        self.config = copy.deepcopy(self.DEFAULT_CONFIG)
         self.load_config()
     
     def load_config(self) -> None:
@@ -116,7 +124,45 @@ class ConfigManager:
     
     def reset_to_defaults(self) -> None:
         """Reset configuration to defaults"""
-        self.config = self.DEFAULT_CONFIG.copy()
+        self.config = copy.deepcopy(self.DEFAULT_CONFIG)
+    
+    def check_daily_refill(self) -> bool:
+        """Check if daily refill should be applied and apply it if needed.
+        
+        Returns:
+            True if refill was applied, False otherwise
+        """
+        if not self.get('gameplay', 'daily_refill_enabled', True):
+            return False
+        
+        last_login = self.get('player', 'last_login')
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        # Check if it's a new day (or first login)
+        refill_applied = False
+        if last_login != today:
+            starting_balance = self.get('gameplay', 'starting_balance', 1000)
+            current_balance = self.get('player', 'current_balance', 1000)
+            
+            # Only refill if balance is below starting balance
+            if current_balance < starting_balance:
+                self.set('player', 'current_balance', starting_balance)
+                refill_applied = True
+        
+        # Update last login
+        self.set('player', 'last_login', today)
+        self.save_config()
+        
+        return refill_applied
+    
+    def get_player_balance(self) -> int:
+        """Get current player balance"""
+        return self.get('player', 'current_balance', 1000)
+    
+    def set_player_balance(self, balance: int) -> None:
+        """Set player balance"""
+        self.set('player', 'current_balance', balance)
+        self.save_config()
 
 
 # Global config instance
@@ -176,6 +222,10 @@ TRANSLATIONS = {
         'normal': 'Normal',
         'fast': 'Fast',
         'disabled': 'Disabled',
+        'daily_refill_title': 'Daily Refill',
+        'daily_refill_message': 'Your balance has been refilled to {balance} credits! Welcome back!',
+        'keyboard_shortcuts': 'Keyboard Shortcuts',
+        'shortcuts_help': 'Press 1-4 for games, F11 for fullscreen, ESC to quit',
     },
     Language.SPANISH: {
         'casino_title': 'Casino de tu mama',
@@ -229,6 +279,10 @@ TRANSLATIONS = {
         'normal': 'Normal',
         'fast': 'Rápida',
         'disabled': 'Desactivada',
+        'daily_refill_title': 'Recarga Diaria',
+        'daily_refill_message': '¡Tu saldo ha sido recargado a {balance} créditos! ¡Bienvenido de vuelta!',
+        'keyboard_shortcuts': 'Atajos de Teclado',
+        'shortcuts_help': 'Presiona 1-4 para juegos, F11 para pantalla completa, ESC para salir',
     }
 }
 
