@@ -30,6 +30,7 @@ class MainUI(QMainWindow):
         self._poker_window = None
         self._slots_window = None
         self._blackjack_window = None
+        self._roulette_window = None
 
         self.setWindowTitle(title)
         self.setGeometry(100, 100, 800, 600)
@@ -247,7 +248,30 @@ class MainUI(QMainWindow):
     
     def launch_roulette(self):
         """Launch roulette game"""
-        QMessageBox.information(self, "Próximamente", "La ruleta estará disponible próximamente.")
+        try:
+            roulette_module = importlib.import_module("Ruleta.ruleta_main")
+            open_roulette_window = getattr(roulette_module, "open_roulette_window")
+
+            self.hide()
+            window, owns_app, app = open_roulette_window(parent=self)
+            self._roulette_window = window
+            window.destroyed.connect(self.on_roulette_window_closed)
+
+            if owns_app:
+                app.exec()
+
+        except ImportError as e:
+            self.show()
+            QMessageBox.warning(self, "Error", f"El juego de ruleta no está disponible: {str(e)}")
+        except Exception as e:
+            self.show()
+            print(e)
+            QMessageBox.critical(self, "Error", f"Error al lanzar ruleta: {str(e)}")
+
+    def on_roulette_window_closed(self, _obj=None):
+        """Restore main window when the roulette window is closed."""
+        self._roulette_window = None
+        self.show()
     
     def launch_slots(self):
         """Launch slot machine game"""
