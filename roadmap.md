@@ -7,8 +7,8 @@ Aqui se encuentra la lista de objetivos de la aplicación.
 * [x] **Poker** - Implementación completa de Texas Hold'em con UI profesional
 * [x] **MainUI** - Menú principal funcional con lanzador de juegos
 * [x] **Tragaperras** - Módulo completo con UI animada, sistema RTP y estadísticas
-* [ ] **Blackjack** - Implementación básica (en progreso)
-* [ ] **Ruleta** - Preparado para implementación
+* [x] **Blackjack** - Implementación completa con dealer AI, doubles y sistema de apuestas
+* [x] **Ruleta** - Implementación completa con todos los tipos de apuestas y animación
 
 ## 🎯 Características del Sistema
 

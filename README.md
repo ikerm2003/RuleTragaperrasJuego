@@ -21,11 +21,23 @@ RuleTragaperrasJuego es un proyecto de casino virtual que presenta múltiples ju
   - Animaciones de giro y resaltado de victorias
   - Estadísticas en tiempo real y sistema de recuperación
   
-- **🔥 Blackjack** (Básico): Implementación básica de Blackjack
+- **🔥 Blackjack** (Completo): Implementación completa de Blackjack
 
-  - Lógica fundamental del juego
-  - Interfaz básica de PyQt6
-- **🎯 Ruleta** (Stub): Preparado para implementación
+  - Lógica completa del juego con dealer AI inteligente
+  - Clases propias heredando de cardCommon
+  - Interfaz profesional con PyQt6
+  - Acciones completas: Hit, Stand, Double Down
+  - Manejo correcto de Ases y detección de Blackjack
+  - Sistema de apuestas y balance integrado
+  
+- **🎯 Ruleta** (Completo): Ruleta europea completa
+  
+  - 37 números (0-36) con colores correctos
+  - Todos los tipos de apuestas estándar
+  - Animación de ruleta giratoria
+  - Mesa de apuestas profesional e intuitiva
+  - Historial y estadísticas de juego
+  
 - **🎛️ MainUI**: Menú principal con lanzador de juegos
 - **⚙️ Sistema de Configuración**: Configuración completa de la aplicación
 
@@ -96,18 +108,18 @@ python Poker/poker_main.py
 python Blackjack/blackjack.py
 ```
 
+#### Ruleta
+
+```bash
+python Ruleta/ruleta_main.py
+```
+
 #### Tragaperras
 ```bash
 python Tragaperras/tragaperras_main.py
 ```
 
 Incluye animación de rodillos, historial de tiradas, estadísticas en vivo, autoplay y controles para líneas/ apuesta por línea.
-
-#### Ruleta (En desarrollo)
-
-```bash
-python Ruleta/ruleta.py
-```
 
 ## 📁 Estructura del Proyecto
 
@@ -120,10 +132,13 @@ RuleTragaperrasJuego/
 │   ├── poker_table.py     # Gestión de mesa (soporte 9 jugadores)
 │   ├── poker_ui.py        # Componentes UI de PyQt6
 │   └── test_poker.py      # Tests unitarios completos
-├── Blackjack/             # Módulo básico de Blackjack
-│   └── blackjack.py       # Implementación básica
-├── Ruleta/                # Módulo de Ruleta (stub)
-│   └── ruleta.py          # Preparado para implementación
+├── Blackjack/             # Módulo completo de Blackjack
+│   └── blackjack.py       # Implementación completa con lógica y UI
+├── Ruleta/                # Módulo completo de Ruleta
+│   ├── ruleta.py          # Punto de entrada legacy
+│   ├── ruleta_main.py     # Punto de entrada principal
+│   ├── ruleta_logic.py    # Lógica del juego de ruleta
+│   └── ruleta_ui.py       # Interfaz de usuario
 ├── Tragaperras/           # Módulo completo de Tragaperras
 │   ├── tragaperras_main.py
 │   ├── tragaperras_logic.py
@@ -288,13 +303,27 @@ logging.basicConfig(level=logging.DEBUG)
 - [x] **MainUI**: Menú principal funcional
   - Lanzador integrado de juegos
   - Acceso a configuración desde menú
-- [ ] **Blackjack**: Implementación básica (en progreso)
-  - Estructura de clases definida
-  - UI básica con PyQt6
-  - Pendiente: Lógica completa del juego
-- [ ] **Ruleta**: Preparado para implementación
-  - Estructura de directorios lista
-  - Pendiente: Implementación completa
+- [x] **Blackjack**: Implementación completa
+  - Lógica completa del juego con dealer AI
+  - Clases BlackjackCard y BlackjackDeck heredando de cardCommon
+  - Manejo completo de apuestas y balance
+  - Acciones: Hit, Stand, Double Down
+  - Cálculo correcto de valores con manejo de Ases
+  - Detección de Blackjack con pago 3:2
+  - UI profesional con visualización de cartas y estado del juego
+  - Integración completa con MainUI
+- [x] **Ruleta**: Implementación completa
+  - Ruleta europea con 37 números (0-36)
+  - Todos los tipos de apuestas estándar:
+    * Pleno (35:1), Caballo (17:1), Transversal (11:1)
+    * Cuadro (8:1), Línea (5:1)
+    * Docenas y Columnas (2:1)
+    * Rojo/Negro, Par/Impar, Alto/Bajo (1:1)
+  - Animación de ruleta giratoria
+  - Mesa de apuestas profesional
+  - Historial de números y estadísticas
+  - Sistema de balance y gestión de fichas
+  - Integración completa con MainUI
 
 ### 🚀 Características Planeadas
 
@@ -320,7 +349,8 @@ logging.basicConfig(level=logging.DEBUG)
 - [ ] **Testing automatizado**: CI/CD con tests automáticos
 - [ ] **Persistencia de datos**: Sistema de guardado de progreso y perfil de usuario
 - [ ] **Análisis de patrones**: Sistema de análisis de comportamiento de jugadores
-- [ ] **Blackjack completo**: Finalizar implementación con dealer AI, splits, y doubles
+- [ ] **Splits en Blackjack**: Implementar división de pares
+- [ ] **Seguro en Blackjack**: Implementar apuesta de seguro contra Blackjack del dealer
 
 ### 📝 Guía de Implementación Óptima
 
