@@ -47,10 +47,33 @@ class ConfigManager:
             'show_probability_hints': False,
             'starting_balance': 1000,
             'daily_refill_enabled': True,
+            'practice_mode': False,
         },
         'player': {
             'last_login': None,
             'current_balance': 1000,
+            'practice_balance': 10000,
+        },
+        'statistics': {
+            'total_hands_played': 0,
+            'total_wins': 0,
+            'total_losses': 0,
+            'biggest_win': 0,
+            'total_wagered': 0,
+            'total_won': 0,
+            'poker_hands': 0,
+            'blackjack_hands': 0,
+            'roulette_spins': 0,
+            'slots_spins': 0,
+        },
+        'achievements': {
+            'unlocked': [],
+            'progress': {},
+        },
+        'missions': {
+            'daily_missions': [],
+            'last_mission_date': None,
+            'completed_today': [],
         }
     }
     
@@ -163,6 +186,114 @@ class ConfigManager:
         """Set player balance"""
         self.set('player', 'current_balance', balance)
         self.save_config()
+    
+    def is_practice_mode(self) -> bool:
+        """Check if practice mode is enabled"""
+        return self.get('gameplay', 'practice_mode', False)
+    
+    def set_practice_mode(self, enabled: bool) -> None:
+        """Set practice mode"""
+        self.set('gameplay', 'practice_mode', enabled)
+        self.save_config()
+    
+    def get_practice_balance(self) -> int:
+        """Get practice mode balance"""
+        return self.get('player', 'practice_balance', 10000)
+    
+    def set_practice_balance(self, balance: int) -> None:
+        """Set practice mode balance"""
+        self.set('player', 'practice_balance', balance)
+        self.save_config()
+    
+    def get_effective_balance(self) -> int:
+        """Get the effective balance based on practice mode"""
+        if self.is_practice_mode():
+            return self.get_practice_balance()
+        return self.get_player_balance()
+    
+    def set_effective_balance(self, balance: int) -> None:
+        """Set the effective balance based on practice mode"""
+        if self.is_practice_mode():
+            self.set_practice_balance(balance)
+        else:
+            self.set_player_balance(balance)
+    
+    # Statistics methods
+    def update_statistic(self, stat_name: str, value: int, increment: bool = True) -> None:
+        """Update a statistic value"""
+        current = self.get('statistics', stat_name, 0)
+        if increment:
+            self.set('statistics', stat_name, current + value)
+        else:
+            self.set('statistics', stat_name, value)
+        self.save_config()
+    
+    def get_statistic(self, stat_name: str, default: int = 0) -> int:
+        """Get a statistic value"""
+        return self.get('statistics', stat_name, default)
+    
+    def reset_statistics(self) -> None:
+        """Reset all statistics"""
+        stats = copy.deepcopy(self.DEFAULT_CONFIG['statistics'])
+        self.config['statistics'] = stats
+        self.save_config()
+    
+    # Achievement methods
+    def unlock_achievement(self, achievement_id: str) -> bool:
+        """Unlock an achievement. Returns True if newly unlocked."""
+        unlocked = self.get('achievements', 'unlocked', [])
+        if achievement_id not in unlocked:
+            unlocked.append(achievement_id)
+            self.set('achievements', 'unlocked', unlocked)
+            self.save_config()
+            return True
+        return False
+    
+    def is_achievement_unlocked(self, achievement_id: str) -> bool:
+        """Check if an achievement is unlocked"""
+        unlocked = self.get('achievements', 'unlocked', [])
+        return achievement_id in unlocked
+    
+    def get_achievement_progress(self, achievement_id: str) -> int:
+        """Get progress for an achievement"""
+        progress = self.get('achievements', 'progress', {})
+        return progress.get(achievement_id, 0)
+    
+    def set_achievement_progress(self, achievement_id: str, progress: int) -> None:
+        """Set progress for an achievement"""
+        progress_dict = self.get('achievements', 'progress', {})
+        progress_dict[achievement_id] = progress
+        self.set('achievements', 'progress', progress_dict)
+        self.save_config()
+    
+    # Mission methods
+    def get_daily_missions(self) -> list:
+        """Get today's daily missions"""
+        return self.get('missions', 'daily_missions', [])
+    
+    def set_daily_missions(self, missions: list) -> None:
+        """Set daily missions"""
+        self.set('missions', 'daily_missions', missions)
+        self.set('missions', 'last_mission_date', datetime.now().strftime('%Y-%m-%d'))
+        self.save_config()
+    
+    def mark_mission_completed(self, mission_id: str) -> None:
+        """Mark a mission as completed"""
+        completed = self.get('missions', 'completed_today', [])
+        if mission_id not in completed:
+            completed.append(mission_id)
+            self.set('missions', 'completed_today', completed)
+            self.save_config()
+    
+    def is_mission_completed(self, mission_id: str) -> bool:
+        """Check if a mission is completed today"""
+        completed = self.get('missions', 'completed_today', [])
+        return mission_id in completed
+    
+    def reset_daily_missions(self) -> None:
+        """Reset daily missions (called on new day)"""
+        self.set('missions', 'completed_today', [])
+        self.save_config()
 
 
 # Global config instance
@@ -226,6 +357,32 @@ TRANSLATIONS = {
         'daily_refill_message': 'Your balance has been refilled to {balance} credits! Welcome back!',
         'keyboard_shortcuts': 'Keyboard Shortcuts',
         'shortcuts_help': 'Press 1-4 for games, F11 for fullscreen, ESC to quit',
+        'practice_mode': 'Practice Mode',
+        'practice_mode_on': 'Practice Mode: ON',
+        'practice_mode_off': 'Practice Mode: OFF',
+        'practice_balance': 'Practice Balance',
+        'real_balance': 'Real Balance',
+        'achievements': 'Achievements',
+        'achievement_unlocked': 'Achievement Unlocked!',
+        'statistics': 'Statistics',
+        'missions': 'Daily Missions',
+        'mission_completed': 'Mission Completed!',
+        'mission_reward': 'Reward: {reward} credits',
+        'total_hands': 'Total Hands',
+        'total_wins': 'Total Wins',
+        'total_losses': 'Total Losses',
+        'biggest_win': 'Biggest Win',
+        'win_rate': 'Win Rate',
+        'view_statistics': 'View Statistics',
+        'view_achievements': 'View Achievements',
+        'view_missions': 'View Missions',
+        'reset_stats': 'Reset Statistics',
+        'reset_stats_confirm': 'Are you sure you want to reset all statistics?',
+        'progress': 'Progress',
+        'completed': 'Completed',
+        'incomplete': 'Incomplete',
+        'locked': 'Locked',
+        'unlocked': 'Unlocked',
     },
     Language.SPANISH: {
         'casino_title': 'Casino de tu mama',
@@ -283,6 +440,32 @@ TRANSLATIONS = {
         'daily_refill_message': '¡Tu saldo ha sido recargado a {balance} créditos! ¡Bienvenido de vuelta!',
         'keyboard_shortcuts': 'Atajos de Teclado',
         'shortcuts_help': 'Presiona 1-4 para juegos, F11 para pantalla completa, ESC para salir',
+        'practice_mode': 'Modo Práctica',
+        'practice_mode_on': 'Modo Práctica: ACTIVADO',
+        'practice_mode_off': 'Modo Práctica: DESACTIVADO',
+        'practice_balance': 'Saldo de Práctica',
+        'real_balance': 'Saldo Real',
+        'achievements': 'Logros',
+        'achievement_unlocked': '¡Logro Desbloqueado!',
+        'statistics': 'Estadísticas',
+        'missions': 'Misiones Diarias',
+        'mission_completed': '¡Misión Completada!',
+        'mission_reward': 'Recompensa: {reward} créditos',
+        'total_hands': 'Manos Totales',
+        'total_wins': 'Victorias Totales',
+        'total_losses': 'Derrotas Totales',
+        'biggest_win': 'Mayor Victoria',
+        'win_rate': 'Tasa de Victoria',
+        'view_statistics': 'Ver Estadísticas',
+        'view_achievements': 'Ver Logros',
+        'view_missions': 'Ver Misiones',
+        'reset_stats': 'Reiniciar Estadísticas',
+        'reset_stats_confirm': '¿Estás seguro de que quieres reiniciar todas las estadísticas?',
+        'progress': 'Progreso',
+        'completed': 'Completado',
+        'incomplete': 'Incompleto',
+        'locked': 'Bloqueado',
+        'unlocked': 'Desbloqueado',
     }
 }
 
