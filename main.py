@@ -29,6 +29,8 @@ class MainUI(QMainWindow):
 
         self._poker_window = None
         self._slots_window = None
+        self._blackjack_window = None
+        self._roulette_window = None
 
         self.setWindowTitle(title)
         self.setGeometry(100, 100, 800, 600)
@@ -219,11 +221,57 @@ class MainUI(QMainWindow):
     
     def launch_blackjack(self):
         """Launch blackjack game"""
-        QMessageBox.information(self, "Próximamente", "Blackjack estará disponible próximamente.")
+        try:
+            blackjack_module = importlib.import_module("Blackjack.blackjack")
+            open_blackjack_window = getattr(blackjack_module, "open_blackjack_window")
+
+            self.hide()
+            window, owns_app, app = open_blackjack_window(parent=self)
+            self._blackjack_window = window
+            window.destroyed.connect(self.on_blackjack_window_closed)
+
+            if owns_app:
+                app.exec()
+
+        except ImportError as e:
+            self.show()
+            QMessageBox.warning(self, "Error", f"El juego de Blackjack no está disponible: {str(e)}")
+        except Exception as e:
+            self.show()
+            print(e)
+            QMessageBox.critical(self, "Error", f"Error al lanzar Blackjack: {str(e)}")
+
+    def on_blackjack_window_closed(self, _obj=None):
+        """Restore main window when the blackjack window is closed."""
+        self._blackjack_window = None
+        self.show()
     
     def launch_roulette(self):
         """Launch roulette game"""
-        QMessageBox.information(self, "Próximamente", "La ruleta estará disponible próximamente.")
+        try:
+            roulette_module = importlib.import_module("Ruleta.ruleta_main")
+            open_roulette_window = getattr(roulette_module, "open_roulette_window")
+
+            self.hide()
+            window, owns_app, app = open_roulette_window(parent=self)
+            self._roulette_window = window
+            window.destroyed.connect(self.on_roulette_window_closed)
+
+            if owns_app:
+                app.exec()
+
+        except ImportError as e:
+            self.show()
+            QMessageBox.warning(self, "Error", f"El juego de ruleta no está disponible: {str(e)}")
+        except Exception as e:
+            self.show()
+            print(e)
+            QMessageBox.critical(self, "Error", f"Error al lanzar ruleta: {str(e)}")
+
+    def on_roulette_window_closed(self, _obj=None):
+        """Restore main window when the roulette window is closed."""
+        self._roulette_window = None
+        self.show()
     
     def launch_slots(self):
         """Launch slot machine game"""
