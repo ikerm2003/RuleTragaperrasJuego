@@ -1,219 +1,130 @@
-# New Features Documentation
+title = get_text('casino_title')  # "Casino de tu mama" or "Your Mom's Casino"
+poker = get_text('poker')         # "Póker" or "Poker"
+demo_features.py    - Feature demonstration script
+# Feature Highlights
 
-This document describes the new features implemented to enhance the casino game experience.
+Resumen actualizado de las funcionalidades más relevantes del proyecto.
 
-## 🎨 Gameplay Animations
+## 🎨 Poker Gameplay Animations
 
-### Overview
-The game now includes smooth, configurable animations that make gameplay more visually engaging.
+Las animaciones del módulo de póker se apoyan en `QPropertyAnimation` para ofrecer una experiencia fluida.
 
-### Features
-- **Card dealing animations**: Cards smoothly animate from the deck to players
-- **Player highlight transitions**: Current player highlighting with subtle animations
-- **Bet change animations**: Visual feedback when bet amounts change
-- **Pot update animations**: Bouncing effect when pot values change
-- **Configurable speeds**: Animations can be disabled, slow, normal, or fast
+- Reparto de cartas con retardos configurables.
+- Resaltado del jugador activo con transiciones suaves.
+- Retroalimentación visual para cambios de apuesta y bote.
+- Velocidad de animación ligada a la configuración global del usuario.
 
-### Implementation
 ```python
-# Animation methods in poker_ui.py
-def animate_bet_change(self, bet_label)
-def animate_player_highlight(self, player_position)
-def animate_card_deal(self, card_label, delay=0)
-def animate_pot_update(self)
+# poker_ui.py
+def animate_card_deal(self, card_label: QLabel, delay: int = 0) -> None:
+    animation = QPropertyAnimation(card_label, b"pos")
+    animation.setEasingCurve(QEasingCurve.OutCubic)
+    animation.setDuration(int(250 * self.current_scale))
+    animation.setStartValue(start_point)
+    animation.setEndValue(end_point)
+    animation.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 ```
 
-### Configuration
-Animations respect user preferences from the configuration system:
-- Speed multipliers: Disabled (0.0x), Slow (1.5x), Normal (1.0x), Fast (0.5x)
-- Enable/disable toggle for all animations
-- Smooth easing curves for professional feel
+## 💰 Poker Bet Display
 
-## 💰 Enhanced Bet Display
+El panel de apuestas del póker diferencia claramente entre la apuesta actual y el acumulado, animando los cambios de valor con colores dorados y bordes suaves.
 
-### Overview
-Improved bet display system shows accurate betting information with better visual feedback.
+- Seguimiento preciso de apuestas en cada ronda.
+- Etiquetas con sombreado y tipografía consistente.
+- Animaciones de rebote al actualizar cantidades.
 
-### Improvements
-- **Accurate bet tracking**: Shows current bet and total bet for the hand
-- **Real-time updates**: Immediate visual feedback during betting rounds
-- **Enhanced styling**: Better visual design with backgrounds and borders
-- **Animation feedback**: Bet labels animate when amounts change
-- **Clear information**: Distinguishes between current bet and total bet
+## 🎰 Slot Machine Module
 
-### Display Logic
+La tragaperras 3x3 replica los estándares arquitectónicos del póker: lógica pura, controlador de mesa y UI desacoplada.
+
+### Highlights
+
+- **Líneas de pago avanzadas**: Nueve patrones, comodines y símbolos scatter con multiplicadores.
+- **RTP configurable**: Multiplicadores dinámicos y premio de consolación en giros perdidos.
+- **Historial y estadísticas**: Balance, RTP acumulado, premio mayor y conteo de comodines.
+- **Autoplay**: Intervalo ajustable, activación/desactivación inmediata y reenganche tras cada giro.
+- **Animación de rodillos**: Mezcla pseudoaleatoria mientras gira y revelado sincronizado del resultado.
+
+```text
+Tragaperras/
+├── tragaperras_logic.py   # Lógica y evaluación de líneas
+├── tragaperras_table.py   # Callbacks de UI, historial y estadísticas
+├── tragaperras_ui.py      # Ventana PyQt6 con animación y controles
+└── tragaperras_main.py    # Punto de entrada reutilizable desde main.py
 ```
-No bet: "Bet: $0"
-First bet: "Bet: $50"
-Raised bet: "Bet: $100 (Total: $150)"
-Multiple raises: "Bet: $200 (Total: $350)"
-```
 
-### Visual Enhancements
-- Golden color scheme for better visibility
-- Semi-transparent backgrounds for better readability
-- Rounded borders for modern appearance
-- Animation on value changes
+### Callbacks disponibles
+
+- `balance_changed`
+- `bet_changed`
+- `lines_changed`
+- `spin_started` / `spin_completed`
+- `statistics_changed`
+- `autoplay_changed`
 
 ## ⚙️ Configuration System
 
-### Overview
-Comprehensive configuration system allowing users to customize their experience.
+El `ConfigManager` centraliza preferencias de pantalla, interfaz y jugabilidad, persistidas en `casino_config.json`.
 
-### Configuration Categories
+- Ajustes de pantalla: fullscreen y resoluciones predefinidas.
+- Preferencias de interfaz: idioma, velocidad de animación, tooltips, sonido.
+- Parámetros de juego: tiempo de auto-fold, confirmaciones y hints.
+- API de acceso sencillo (`config_manager.get(...)`, `set(...)`, `save_config()`).
 
-#### Display Settings
-- **Fullscreen mode**: Toggle fullscreen/windowed mode
-- **Resolution**: Auto, HD (1280x720), Full HD (1920x1080), Ultra HD (2560x1440)
-- **VSync**: Vertical synchronization toggle
+## � Internationalization
 
-#### Interface Settings
-- **Language**: Spanish/English support
-- **Animation speed**: Disabled/Slow/Normal/Fast
-- **Enable animations**: Master toggle for all animations
-- **Show tooltips**: Help text toggle
-- **Sound**: Audio enable/disable
+Todo el contenido visible pasa por `get_text`, con diccionarios completos en español e inglés.
 
-#### Gameplay Settings
-- **Auto-fold timeout**: Time before automatic fold (10-120 seconds)
-- **Confirm actions**: Confirmation dialogs for important actions
-- **Probability hints**: Show/hide probability information
+- Nuevas claves para la tragaperras: balance, autoplay, mensajes de victoria y estadísticas.
+- Ventanas y menús (póker, tragaperras, menú principal) responden al cambio de idioma sin reiniciar.
 
-### Configuration Dialog
-Tabbed interface with three main sections:
-1. **Display**: Screen and visual settings
-2. **Interface**: Language and interaction preferences  
-3. **Gameplay**: Game-specific options
+## 🎮 Casino UI & Main Menu
 
-### Persistence
-- Settings saved to `casino_config.json`
-- Automatic loading on startup
-- Reset to defaults option
-- Type-safe configuration with enums
+`main.py` ofrece un lanzador central con estilo de casino, integrando póker y la nueva tragaperras.
 
-## 🌐 Internationalization
+- Botones estilizados con gradientes y sombras.
+- Acceso directo a diálogo de configuración.
+- Gestión de ventanas hija: al cerrar un juego se restaura el menú principal.
 
-### Languages Supported
-- **Spanish** (default): Native language support
-- **English**: Full translation available
+## 🛠️ Technical Overview
 
-### Key Translated Elements
-- Window titles and menu items
-- Game names (Poker, Blackjack, Roulette, Slot Machine)
-- Action buttons (Fold, Call, Raise, Check)
-- Configuration dialog
-- Interface labels
+- Arquitectura modular: `*_logic.py`, `*_table.py`, `*_ui.py`, `*_main.py`.
+- Uso extensivo de PyQt6 con escalado responsivo (`get_scaled_size`).
+- Callbacks entre lógica y UI para evitar dependencias circulares.
+- Tests organizados en `Test/` y scripts de entorno (`setup_env.bat`).
 
-### Translation System
-```python
-from config import get_text
+## 🚀 Usage Snippets
 
-# Usage
-title = get_text('casino_title')  # "Casino de tu mama" or "Your Mom's Casino"
-poker = get_text('poker')         # "Póker" or "Poker"
-```
-
-## 🎮 Enhanced Main Menu
-
-### Features
-- **Modern design**: Professional casino-style interface
-- **Game launcher**: Easy access to different games
-- **Configuration access**: Settings available from main menu
-- **Responsive layout**: Adapts to different screen sizes
-- **Visual feedback**: Hover effects and animations
-
-### Game Integration
-- **Poker**: Fully integrated with new features
-- **Other games**: Placeholder for future implementation
-- **Consistent styling**: Unified visual theme
-
-## 🛠️ Technical Implementation
-
-### Architecture
-- **Modular design**: Separated concerns across multiple files
-- **Configuration layer**: Centralized settings management
-- **Animation system**: PyQt6 QPropertyAnimation integration
-- **Translation system**: Dictionary-based with fallbacks
-- **Error handling**: Graceful degradation when features unavailable
-
-### Files Structure
-```
-config.py           - Configuration management system
-config_dialog.py    - Configuration UI dialog
-poker_ui.py         - Enhanced poker interface with animations
-mainui.py           - Improved main menu with game launcher
-demo_features.py    - Feature demonstration script
-```
-
-### Compatibility
-- **PyQt6 dependent**: Requires PyQt6 for full functionality
-- **Graceful fallback**: Works without advanced features if dependencies missing
-- **Test compatibility**: All existing tests still pass
-- **Minimal changes**: Surgical modifications to existing codebase
-
-## 🚀 Usage Examples
-
-### Running the Demo
 ```bash
-python demo_features.py
+# Menú principal del casino
+python main.py
+
+# Póker Texas Hold'em
+python Poker/poker_main.py
+
+# Tragaperras 3x3 con animación
+python Tragaperras/tragaperras_main.py
 ```
 
-### Launching Games
+## 🧪 Testing
+
 ```bash
-# Main casino interface
-python mainui.py
-
-# Direct poker launch
-python poker_main.py
+python -m unittest Poker/test_poker.py -v
+python -m unittest test_tragaperras_logic -v
+python -m unittest Test.test_tragaperras -v
+python -m unittest Test.test_tragaperras_table -v
 ```
 
-### Configuration Usage
-```python
-from config import config_manager, get_text
+## � Future Enhancements
 
-# Check settings
-if config_manager.are_animations_enabled():
-    animate_something()
-
-# Change language
-config_manager.set('interface', 'language', 'en')
-config_manager.save_config()
-```
-
-## 📋 Future Enhancements
-
-### Planned Features
-- Sound effects system
-- More animation types (card flips, chip movements)
-- Additional language support
-- Tournament mode configuration
-- Advanced AI personality settings
-- Hand history and statistics
-- Online multiplayer options
-
-### Extensibility
-The configuration system is designed to easily accommodate new settings:
-- Add new enums for option types
-- Extend translation dictionaries
-- Add new configuration sections
-- Implement new animation types
+- Sonido ambiente y efectos sincronizados.
+- Implementación completa de Blackjack y Ruleta.
+- Misiones diarias, estadísticas globales y soporte multijugador.
+- Más idiomas y temas visuales customizables.
 
 ## 🔧 Development Notes
 
-### Adding New Animations
-1. Create animation method in poker_ui.py
-2. Check `config_manager.are_animations_enabled()`
-3. Use `config_manager.get_animation_speed()` for duration
-4. Apply easing curves for smooth motion
-
-### Adding New Translations
-1. Add key-value pairs to `TRANSLATIONS` in config.py
-2. Use `get_text(key)` in UI code
-3. Test with both languages
-4. Update configuration dialog if needed
-
-### Adding New Settings
-1. Add to `DEFAULT_CONFIG` in config.py
-2. Create UI controls in config_dialog.py
-3. Add getter methods to ConfigManager
-4. Update settings persistence logic
+- Mantener la separación lógica/UI y reutilizar callbacks existentes.
+- Añadir nuevas claves de traducción en `config.py` y usar `get_text`.
+- Incluir tests unitarios cuando se amplíe la lógica de juego.
+- Ajustar animaciones respetando las preferencias definidas en `ConfigManager`.
