@@ -1,7 +1,10 @@
 {
   "display": {
     "fullscreen": false,
-    "resolution": [-1, -1],
+    "resolution": [
+      -1,
+      -1
+    ],
     "vsync": true
   },
   "interface": {
@@ -14,6 +17,39 @@
   "gameplay": {
     "auto_fold_timeout": 30,
     "confirm_actions": true,
-    "show_probability_hints": false
+    "show_probability_hints": false,
+    "starting_balance": 1000,
+    "daily_refill_enabled": true,
+    "practice_mode": false
+  },
+  "player": {
+    "last_login": "2025-10-22",
+    "current_balance": 1000,
+    "practice_balance": 10000
+  },
+  "statistics": {
+    "total_hands_played": 0,
+    "total_wins": 0,
+    "total_losses": 0,
+    "biggest_win": 0,
+    "total_wagered": 0,
+    "total_won": 0,
+    "poker_hands": 0,
+    "blackjack_hands": 0,
+    "roulette_spins": 0,
+    "slots_spins": 0
+  },
+  "achievements": {
+    "unlocked": [],
+    "progress": {}
+  },
+  "missions": {
+    "daily_missions": [
+      "blackjack_5",
+      "slots_10",
+      "roulette_10"
+    ],
+    "last_mission_date": "2025-10-22",
+    "completed_today": []
   }
 }
