@@ -4,6 +4,7 @@ Enhanced Animation System for Casino Game
 Provides card flip, chip movement, and other advanced animations
 """
 
+from PyQt6.QtCore import QObject
 from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QPoint, QRect, QParallelAnimationGroup, QSequentialAnimationGroup, Qt
 from PyQt6.QtWidgets import QLabel, QWidget
 from PyQt6.QtGui import QPixmap, QTransform
@@ -251,15 +252,18 @@ class AnimationManager:
         anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         
         final_pos = widget.pos()
+        widget_parent = widget.parent()
         
         if direction == "left":
             start_pos = QPoint(-widget.width(), final_pos.y())
         elif direction == "right":
-            start_pos = QPoint(widget.parent().width(), final_pos.y())
+            parent_width = widget_parent.width() if isinstance(widget_parent, QWidget) else 800
+            start_pos = QPoint(parent_width, final_pos.y())
         elif direction == "top":
             start_pos = QPoint(final_pos.x(), -widget.height())
         else:  # bottom
-            start_pos = QPoint(final_pos.x(), widget.parent().height())
+            parent_height = widget_parent.height() if isinstance(widget_parent, QWidget) else 600
+            start_pos = QPoint(final_pos.x(), parent_height)
         
         anim.setStartValue(start_pos)
         anim.setEndValue(final_pos)

@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
-from config import (
+from .config import (
     ConfigManager, Language, Resolution, AnimationSpeed, 
     get_text, config_manager
 )

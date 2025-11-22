@@ -43,7 +43,7 @@ except ImportError:  # pragma: no cover - ejecución como script
     from Tragaperras.tragaperras_table import SlotMachineTable, SlotMachineTableFactory
     from Tragaperras.tragaperras_logic import PAYLINES, SpinResult
 
-from config import config_manager, get_text  # type: ignore
+from config import config_manager, get_text
 
 
 # ---------------------------------------------------------------------------

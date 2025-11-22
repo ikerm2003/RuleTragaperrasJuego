@@ -8,7 +8,7 @@ La implementación completa está en:
 """
 
 # Re-exportar para compatibilidad
-from Ruleta.ruleta_main import main, open_roulette_window
-from Ruleta.ruleta_logic import RouletteGame, BetType
+from ..Ruleta.ruleta_main import main, open_roulette_window
+from ..Ruleta.ruleta_logic import RouletteGame, BetType
 
 __all__ = ['main', 'open_roulette_window', 'RouletteGame', 'BetType']

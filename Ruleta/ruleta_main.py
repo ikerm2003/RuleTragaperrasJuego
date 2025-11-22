@@ -13,7 +13,7 @@ parent_dir = Path(__file__).resolve().parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from Ruleta.ruleta_ui import RouletteWindow
+from ..Ruleta.ruleta_ui import RouletteWindow
 
 
 def main():
@@ -27,7 +27,7 @@ def main():
     window = RouletteWindow()
     window.show()
     
-    if owns_app:
+    if owns_app and app is not None:
         sys.exit(app.exec())
     
     return window, owns_app, app

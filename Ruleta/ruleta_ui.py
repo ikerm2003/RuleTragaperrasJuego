@@ -16,13 +16,14 @@ from PyQt6.QtCore import Qt, QTimer, QPointF, QRectF, pyqtSignal
 import math
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).resolve().parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from Ruleta.ruleta_logic import RouletteGame, BetType, RED_NUMBERS, BLACK_NUMBERS
+from ..Ruleta.ruleta_logic import RouletteGame, BetType, RED_NUMBERS, BLACK_NUMBERS
 
 
 class RouletteWheel(QWidget):
@@ -34,7 +35,7 @@ class RouletteWheel(QWidget):
         self.rotation = 0
         self.spinning = False
         self.target_rotation = 0
-        self.winning_number = None
+        self.winning_number: Optional[int] = None
         
         # Timer para animación
         self.timer = QTimer()
@@ -49,7 +50,7 @@ class RouletteWheel(QWidget):
         rotations = 5  # 5 vueltas completas
         angle_per_number = 360 / 37  # 37 números (0-36)
         target_angle = number * angle_per_number
-        self.target_rotation = self.rotation + (rotations * 360) + target_angle
+        self.target_rotation = int(self.rotation + (rotations * 360) + target_angle)
         
         self.timer.start(20)  # 50 FPS
     
@@ -64,11 +65,11 @@ class RouletteWheel(QWidget):
                 self.timer.stop()
             else:
                 # Desaceleración suave
-                self.rotation += diff * 0.05
+                self.rotation += int(diff * 0.05)
             
             self.update()
     
-    def paintEvent(self, event):
+    def paintEvent(self, a0):
         """Dibuja la ruleta"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -511,8 +512,8 @@ class RouletteWindow(QMainWindow):
             )
             self.history_label.setText(history_text)
     
-    def closeEvent(self, event):
+    def closeEvent(self, a0):
         """Maneja el cierre de la ventana"""
         if self.parent_window:
             self.parent_window.show()
-        event.accept()
+        a0.accept()

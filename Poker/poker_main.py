@@ -18,9 +18,9 @@ for path in (ROOT_DIR, POKER_DIR):
         sys.path.insert(0, str_path)
 
 if __package__:
-    from .poker_ui import PokerWindow  # type: ignore
+    from .poker_ui import PokerWindow  
 else:
-    from Poker.poker_ui import PokerWindow  # type: ignore
+    from Poker.poker_ui import PokerWindow  
 
 
 

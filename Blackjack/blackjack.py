@@ -16,7 +16,7 @@ parent_dir = Path(__file__).resolve().parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from cardCommon import BaseCard, BaseDeck
+from ..cardCommon import BaseCard, BaseDeck
 
 
 class BlackjackCard(BaseCard):
@@ -578,20 +578,21 @@ class BlackJackWindow(QMainWindow):
         self.bet_spinbox.setEnabled(True)
         self.deal_button.setEnabled(True)
     
-    def closeEvent(self, event):
+    def closeEvent(self, a0):
         """Handle window close event"""
         if self.parent_window:
             self.parent_window.show()
-        event.accept()
+        a0.accept()
 
 
 def main():
     """Entry point for standalone blackjack game"""
     app = QApplication.instance()
-    owns_app = app is None
-    
-    if owns_app:
+    if app is None:
         app = QApplication(sys.argv)
+        owns_app = True
+    else:
+        owns_app = False
     
     window = BlackJackWindow()
     window.show()

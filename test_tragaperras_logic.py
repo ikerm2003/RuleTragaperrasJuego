@@ -17,7 +17,7 @@ class FixedGridSlotMachine(SlotMachine):
         super().__init__(**kwargs)
         self._fixed_grid = tuple(tuple(cell for cell in row) for row in fixed_grid)
 
-    def _generate_grid(self):  # type: ignore[override]
+    def _generate_grid(self):
         return self._fixed_grid
 
 

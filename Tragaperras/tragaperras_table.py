@@ -114,19 +114,19 @@ class BaseSlotMachineTable(SlotMachine):
 	# ------------------------------------------------------------------
 	# Overrides con notificaciones
 
-	def set_bet_per_line(self, amount: int) -> None:  # type: ignore[override]
+	def set_bet_per_line(self, amount: int) -> None:  
 		super().set_bet_per_line(amount)
 		self._notify("bet_changed", bet_per_line=self.bet_per_line)
 
-	def set_active_lines(self, lines: Iterable[int]) -> None:  # type: ignore[override]
+	def set_active_lines(self, lines: Iterable[int]) -> None:  
 		super().set_active_lines(lines)
 		self._notify("lines_changed", lines=self.active_lines)
 
-	def add_credits(self, amount: int) -> None:  # type: ignore[override]
+	def add_credits(self, amount: int) -> None:  
 		super().add_credits(amount)
 		self._notify("balance_changed", balance=self.balance)
 
-	def spin(self) -> SpinResult:  # type: ignore[override]
+	def spin(self) -> SpinResult:  
 		if self._is_spinning:
 			raise RuntimeError("Ya hay una tirada en curso")
 

@@ -53,10 +53,10 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from poker_table import NinePlayerTable, BasePokerTable
-from poker_logic import PlayerAction, GamePhase, Player
-from cardCommon import PokerCard
-from config import config_manager, get_text
+from .poker_table import NinePlayerTable, BasePokerTable
+from .poker_logic import PlayerAction, GamePhase, Player
+from ..cardCommon import PokerCard
+from ..config import config_manager, get_text
 
 
 class PokerWindow(QMainWindow):
@@ -113,31 +113,35 @@ class PokerWindow(QMainWindow):
     
     def create_menu_bar(self):
         """Create menu bar with settings option"""
-        menubar: QMenuBar = self.menuBar()
+        menubar = QMenuBar(self)
+        self.setMenuBar(menubar)
         
         # Game menu
-        game_menu: QMenu = menubar.addMenu("Juego")
+        game_menu = QMenu("Juego", self)
+        menubar.addMenu(game_menu)
         
-        new_hand_action: QAction = game_menu.addAction(get_text('new_hand'))
+        new_hand_action = QAction(get_text('new_hand'), self)
         new_hand_action.triggered.connect(self.start_new_game)
+        game_menu.addAction(new_hand_action)
         
         game_menu.addSeparator()
         
-        exit_action: QAction = game_menu.addAction("Salir")
-        exit_action.triggered.connect(self.close)
+        exit_action = game_menu.addAction("Salir")
+        if isinstance(exit_action, QAction):
+            exit_action.triggered.connect(self.close)
         
         # Settings menu
-        settings_menu: QMenu = menubar.addMenu(get_text('settings'))
+        settings_menu = QMenu(get_text('settings'), self)
+        menubar.addMenu(settings_menu)
 
-        config_action: QAction = settings_menu.addAction("Configuración...")
+        config_action = QAction("Configuración...", self)
         config_action.triggered.connect(self.show_config_dialog)
-        
-        self.setMenuBar(menubar)
+        settings_menu.addAction(config_action)
         
     def show_config_dialog(self):
         """Show configuration dialog"""
         try:
-            from config_dialog import ConfigDialog
+            from ..config_dialog import ConfigDialog
             dialog = ConfigDialog(self)
             dialog.config_changed.connect(self.apply_config_changes)
             dialog.exec()
@@ -372,11 +376,11 @@ class PokerWindow(QMainWindow):
             cards_layout.addWidget(card_label)
         
         # Store references for updates
-        frame.cards_frame = cards_frame
-        frame.cards_layout = cards_layout
-        frame.card_labels = card_labels
-        frame.name_label = name_label
-        frame.chips_label = chips_label
+        setattr(frame, "cards_frame", cards_frame)
+        setattr(frame, "cards_layout", cards_layout)
+        setattr(frame, "card_labels", card_labels)
+        setattr(frame, "name_label", name_label)
+        setattr(frame, "chips_label", chips_label)
         
         layout.addWidget(cards_frame)
         
@@ -392,7 +396,7 @@ class PokerWindow(QMainWindow):
             text-align: center;
         """)
         bet_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        frame.bet_label = bet_label
+        setattr(frame, "bet_label", bet_label)
         layout.addWidget(bet_label)
         
         return frame
@@ -560,6 +564,8 @@ class PokerWindow(QMainWindow):
 
         # Raise controls
         can_raise = (PlayerAction.RAISE in actions) and (current_player.chips > 0)
+        min_raise = self.table.current_bet + self.table.min_raise if hasattr(self.table, 'min_raise') else 0
+        max_raise = current_player.chips + current_player.current_bet if hasattr(current_player, 'chips') and hasattr(current_player, 'current_bet') else 0
         if can_raise:
             min_raise = self.table.current_bet + self.table.min_raise
             max_raise = current_player.chips + current_player.current_bet
@@ -629,7 +635,7 @@ class PokerWindow(QMainWindow):
         animation.setStartValue(original_geometry)
         animation.setKeyValueAt(0.5, expanded_geometry)
         animation.setEndValue(original_geometry)
-        animation.finished.connect(lambda: self._bet_animations.pop(bet_label, None))  # type: ignore[attr-defined]
+        animation.finished.connect(lambda: self._bet_animations.pop(bet_label, None))
         
         self._bet_animations[bet_label] = animation
         animation.start()
@@ -657,7 +663,13 @@ class PokerWindow(QMainWindow):
             animation.setEasingCurve(QEasingCurve.Type.OutCubic)
             
             original_pos = frame.pos()
-            lifted_pos = original_pos + frame.parent().mapFromGlobal(frame.mapToGlobal(original_pos)) - original_pos
+            parent_widget = frame.parentWidget()
+            if parent_widget is not None:
+                global_pos = frame.mapToGlobal(original_pos)
+                mapped_pos = parent_widget.mapFromGlobal(global_pos)
+                lifted_pos = mapped_pos
+            else:
+                lifted_pos = original_pos
             lifted_pos.setY(lifted_pos.y() - 3)
             
             animation.setStartValue(original_pos)
@@ -693,7 +705,7 @@ class PokerWindow(QMainWindow):
             animation.start()
         
         self._card_animations.append(animation)
-        animation.finished.connect(lambda: self._card_animations.remove(animation) if animation in self._card_animations else None)  # type: ignore[attr-defined]
+        animation.finished.connect(lambda: self._card_animations.remove(animation) if animation in self._card_animations else None)
         
     def animate_pot_update(self):
         """Animate pot value changes"""
@@ -794,12 +806,21 @@ class PokerWindow(QMainWindow):
     
     def update_player_displays(self):
         """Update all player displays"""
+        # If the number of player displays does not match the number of players, re-create them
+        if len(self.player_displays) != len(self.table.players):
+            # Remove old widgets from layout
+            for frame in self.player_displays:
+                frame.setParent(None)
+            self.player_displays = []
+            self.create_player_displays()
+
         for i, frame in enumerate(self.player_displays):
             if i < len(self.table.players):
                 player = self.table.players[i]
                 
                 # Update chips and bet with enhanced display
-                frame.chips_label.setText(f"${player.chips}")
+                if hasattr(frame, "chips_label"):
+                    frame.chips_label.setText(f"${player.chips}")
                 
                 # Enhanced bet display with total bet information
                 current_bet = player.current_bet
@@ -812,13 +833,15 @@ class PokerWindow(QMainWindow):
                         bet_text = f"Bet: ${current_bet}"
                     
                     # Add visual emphasis for new bets
-                    if hasattr(frame.bet_label, '_last_bet') and frame.bet_label._last_bet != current_bet:
-                        self.animate_bet_change(frame.bet_label)
-                    frame.bet_label._last_bet = current_bet
+                    if hasattr(frame, "bet_label"):
+                        if hasattr(frame.bet_label, '_last_bet') and frame.bet_label._last_bet != current_bet:
+                            self.animate_bet_change(frame.bet_label)
+                        frame.bet_label._last_bet = current_bet
                 else:
                     bet_text = "Bet: $0"
                     
-                frame.bet_label.setText(bet_text)
+                if hasattr(frame, "bet_label"):
+                    frame.bet_label.setText(bet_text)
                 
                 # Update player state styling
                 if i == self.table.current_player and not self.table.is_hand_over():
@@ -830,17 +853,18 @@ class PokerWindow(QMainWindow):
                 
                 # Update cards
                 reveal_cards = len(player.hand) >= 2 and (player.is_human or self.reveal_all_hands)
-                for j, card_label in enumerate(frame.card_labels):
-                    if reveal_cards and j < len(player.hand):
-                        card = player.hand[j]
-                        pixmap = self.load_card_image(card)
-                        card_label.setPixmap(pixmap)
-                        card_label.setText("")
-                        card_label.setStyleSheet("")
-                    else:
-                        card_label.setPixmap(QPixmap())
-                        card_label.setText("?")
-                        card_label.setStyleSheet(self.get_card_back_style())
+                if hasattr(frame, "card_labels"):
+                    for j, card_label in enumerate(frame.card_labels):
+                        if reveal_cards and j < len(player.hand):
+                            card = player.hand[j]
+                            pixmap = self.load_card_image(card)
+                            card_label.setPixmap(pixmap)
+                            card_label.setText("")
+                            card_label.setStyleSheet("")
+                        else:
+                            card_label.setPixmap(QPixmap())
+                            card_label.setText("?")
+                            card_label.setStyleSheet(self.get_card_back_style())
     
     def load_card_image(self, card: PokerCard) -> QPixmap:
         """Create a visual representation of a card"""
@@ -1068,7 +1092,7 @@ class PokerWindow(QMainWindow):
             }
         """
     
-    def resizeEvent(self, event: QResizeEvent):  # type: ignore[override]
+    def resizeEvent(self, event: QResizeEvent):
         """Handle window resize for responsive scaling"""
         super().resizeEvent(event)
         current_size = self.size()

@@ -21,7 +21,7 @@ class DeterministicSlotMachineTable(SlotMachineTable):
         super().__init__(**kwargs)
         self._grid = tuple(tuple(symbol for symbol in row) for row in grid)
 
-    def _generate_grid(self):  # type: ignore[override]
+    def _generate_grid(self):  
         return self._grid
 
 

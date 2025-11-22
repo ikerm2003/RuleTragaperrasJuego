@@ -14,11 +14,15 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QPixmap, QIcon, QKeySequence, QShortcut
 import sys
 import importlib
+from PyQt6.QtWidgets import QDialog, QProgressBar
+from .config import config_manager
+from PyQt6.QtWidgets import QDialog, QScrollArea, QVBoxLayout as QVBox
+from .config import config_manager
 
-from config import config_manager, get_text  # type: ignore[import-not-found]
-from config_dialog import ConfigDialog  # type: ignore[import-not-found]
-from achievements import AchievementManager  # type: ignore[import-not-found]
-from missions import MissionManager  # type: ignore[import-not-found]
+from config import config_manager, get_text
+from config_dialog import ConfigDialog  
+from achievements import AchievementManager  
+from missions import MissionManager
 
 
 class MainUI(QMainWindow):
@@ -440,7 +444,7 @@ class MainUI(QMainWindow):
     
     def on_achievement_unlocked(self, achievement):
         """Handle achievement unlock notification"""
-        from config import config_manager
+        from .config import config_manager
         lang = config_manager.get_language().value
         
         message = f"{achievement.get_name(lang)}\n\n{achievement.get_description(lang)}\n\n{get_text('mission_reward').format(reward=achievement.reward)}"
@@ -515,8 +519,6 @@ class MainUI(QMainWindow):
     
     def show_achievements(self):
         """Show achievements dialog"""
-        from PyQt6.QtWidgets import QDialog, QScrollArea, QVBoxLayout as QVBox
-        from config import config_manager
         
         lang = config_manager.get_language().value
         
@@ -609,9 +611,6 @@ class MainUI(QMainWindow):
     
     def show_missions(self):
         """Show daily missions dialog"""
-        from PyQt6.QtWidgets import QDialog, QProgressBar
-        from config import config_manager
-        
         lang = config_manager.get_language().value
         
         dialog = QDialog(self)

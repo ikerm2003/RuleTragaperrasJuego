@@ -19,9 +19,9 @@ for path in (ROOT_DIR, TRAGAPERRAS_DIR):
 		sys.path.insert(0, str_path)
 
 if __package__:
-	from .tragaperras_ui import SlotMachineWindow  # type: ignore
+	from .tragaperras_ui import SlotMachineWindow
 else:  # pragma: no cover - ejecución directa
-	from Tragaperras.tragaperras_ui import SlotMachineWindow  # type: ignore
+	from Tragaperras.tragaperras_ui import SlotMachineWindow
 
 
 def create_slot_application() -> QApplication:

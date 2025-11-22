@@ -16,7 +16,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from cardCommon import PokerCard, PokerDeck
+from ..cardCommon import PokerCard, PokerDeck
 
 
 class GamePhase(Enum):
@@ -100,7 +100,7 @@ class Player:
         """Initialize the player's hand.
         """
         if self.hand is None:
-            self.hand = []  # type: ignore
+            self.hand = []
 
     def can_act(self) -> bool:
         """Check if the player can take an action (not folded or all-in and has chips)"""
