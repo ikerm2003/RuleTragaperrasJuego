@@ -13,7 +13,7 @@ parent_dir = Path(__file__).resolve().parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from ..Ruleta.ruleta_ui import RouletteWindow
+from Ruleta.ruleta_ui import RouletteWindow
 
 
 def main():
@@ -35,10 +35,17 @@ def main():
 
 def open_roulette_window(parent=None):
     """Open roulette window from main UI"""
-    if parent is None:
-        return main()
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+        owns_app = True
     else:
-        return (RouletteWindow(parent), False, None)
+        owns_app = False
+    
+    window = RouletteWindow(parent)
+    window.show()
+    
+    return window, owns_app, app
 
 
 if __name__ == "__main__":

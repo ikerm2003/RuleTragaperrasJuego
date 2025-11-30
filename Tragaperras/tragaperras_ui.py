@@ -36,8 +36,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from tragaperras_table import SlotMachineTable, SlotMachineTableFactory
-from ragaperras_logic import PAYLINES, SpinResult
+from Tragaperras.tragaperras_table import SlotMachineTable, SlotMachineTableFactory
+from Tragaperras.tragaperras_logic import PAYLINES, SpinResult
 from config import config_manager, get_text
 
 

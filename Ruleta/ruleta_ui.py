@@ -23,7 +23,7 @@ parent_dir = Path(__file__).resolve().parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from ..Ruleta.ruleta_logic import RouletteGame, BetType, RED_NUMBERS, BLACK_NUMBERS
+from Ruleta.ruleta_logic import RouletteGame, BetType, RED_NUMBERS, BLACK_NUMBERS
 
 
 class RouletteWheel(QWidget):
