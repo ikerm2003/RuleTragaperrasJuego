@@ -16,7 +16,9 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from ..cardCommon import PokerCard, PokerDeck
+import cardCommon
+PokerCard = cardCommon.PokerCard
+PokerDeck = cardCommon.PokerDeck
 
 
 class GamePhase(Enum):

@@ -23,7 +23,7 @@
     "practice_mode": false
   },
   "player": {
-    "last_login": "2025-10-22",
+    "last_login": "2025-11-30",
     "current_balance": 1000,
     "practice_balance": 10000
   },
@@ -45,11 +45,11 @@
   },
   "missions": {
     "daily_missions": [
-      "blackjack_5",
-      "slots_10",
-      "roulette_10"
+      "win_5",
+      "big_win_1000",
+      "poker_5"
     ],
-    "last_mission_date": "2025-10-22",
+    "last_mission_date": "2025-11-30",
     "completed_today": []
   }
 }

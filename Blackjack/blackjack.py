@@ -16,7 +16,9 @@ parent_dir = Path(__file__).resolve().parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-from ..cardCommon import BaseCard, BaseDeck
+import cardCommon
+BaseCard = cardCommon.BaseCard
+BaseDeck = cardCommon.BaseDeck
 
 
 class BlackjackCard(BaseCard):
@@ -605,7 +607,17 @@ def main():
 
 def open_blackjack_window(parent=None):
     """Open blackjack window from main UI"""
-    return main() if parent is None else (BlackJackWindow(parent), False, None)
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+        owns_app = True
+    else:
+        owns_app = False
+    
+    window = BlackJackWindow(parent)
+    window.show()
+    
+    return window, owns_app, app
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ Theme System for Casino Game
 Provides customizable visual themes
 """
 
+from typing import Optional
 from enum import Enum
 from typing import Dict
 from dataclasses import dataclass
@@ -174,13 +175,13 @@ class ThemeManager:
         self.config.set('interface', 'theme', theme.value)
         self.config.save_config()
     
-    def get_theme_colors(self, theme: ThemeType = None) -> ThemeColors:
+    def get_theme_colors(self, theme: Optional[ThemeType] = None) -> ThemeColors:
         """Get colors for specified theme (or current theme)"""
         if theme is None:
             theme = self.get_current_theme()
         return self.themes.get(theme, self.themes[ThemeType.CLASSIC_GREEN])
     
-    def get_window_stylesheet(self, theme: ThemeType = None) -> str:
+    def get_window_stylesheet(self, theme: Optional[ThemeType] = None) -> str:
         """Get main window stylesheet for theme"""
         colors = self.get_theme_colors(theme)
         
@@ -192,7 +193,7 @@ class ThemeManager:
             }}
         """
     
-    def get_button_stylesheet(self, theme: ThemeType = None) -> str:
+    def get_button_stylesheet(self, theme: Optional[ThemeType] = None) -> str:
         """Get button stylesheet for theme"""
         colors = self.get_theme_colors(theme)
         
@@ -214,7 +215,7 @@ class ThemeManager:
             }}
         """
     
-    def get_frame_stylesheet(self, theme: ThemeType = None) -> str:
+    def get_frame_stylesheet(self, theme: Optional[ThemeType] = None) -> str:
         """Get frame stylesheet for theme"""
         colors = self.get_theme_colors(theme)
         
@@ -227,7 +228,7 @@ class ThemeManager:
             }}
         """
     
-    def get_label_stylesheet(self, theme: ThemeType = None, accent: bool = False) -> str:
+    def get_label_stylesheet(self, theme: Optional[ThemeType] = None, accent: bool = False) -> str:
         """Get label stylesheet for theme"""
         colors = self.get_theme_colors(theme)
         color = colors.text_accent if accent else colors.text_primary
@@ -238,7 +239,7 @@ class ThemeManager:
             }}
         """
     
-    def apply_theme_to_widget(self, widget, theme: ThemeType = None) -> None:
+    def apply_theme_to_widget(self, widget, theme: Optional[ThemeType] = None) -> None:
         """Apply theme to a widget"""
         colors = self.get_theme_colors(theme)
         

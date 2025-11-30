@@ -55,8 +55,11 @@ if str(ROOT_DIR) not in sys.path:
 
 from .poker_table import NinePlayerTable, BasePokerTable
 from .poker_logic import PlayerAction, GamePhase, Player
-from ..cardCommon import PokerCard
-from ..config import config_manager, get_text
+import cardCommon
+PokerCard = cardCommon.PokerCard
+import config
+config_manager = config.config_manager
+get_text = config.get_text
 
 
 class PokerWindow(QMainWindow):

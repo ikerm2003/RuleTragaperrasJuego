@@ -15,9 +15,7 @@ from PyQt6.QtGui import QFont, QPixmap, QIcon, QKeySequence, QShortcut
 import sys
 import importlib
 from PyQt6.QtWidgets import QDialog, QProgressBar
-from .config import config_manager
 from PyQt6.QtWidgets import QDialog, QScrollArea, QVBoxLayout as QVBox
-from .config import config_manager
 
 from config import config_manager, get_text
 from config_dialog import ConfigDialog  
@@ -323,9 +321,10 @@ class MainUI(QMainWindow):
             if owns_app:
                 app.exec()
 
-        except ImportError:
+        except ImportError as e:
             self.show()
-            QMessageBox.warning(self, "Error", "El juego de póker no está disponible.")
+            # QMessageBox.warning(self, "Error", "El juego de póker no está disponible.")
+            raise ImportError(e)
         except Exception as e:
             self.show()
             print(e)

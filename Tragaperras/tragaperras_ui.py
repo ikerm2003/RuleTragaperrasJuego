@@ -36,13 +36,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-try:  # pragma: no cover - rutas relativas cuando se importa como paquete
-    from .tragaperras_table import SlotMachineTable, SlotMachineTableFactory
-    from .tragaperras_logic import PAYLINES, SpinResult
-except ImportError:  # pragma: no cover - ejecución como script
-    from Tragaperras.tragaperras_table import SlotMachineTable, SlotMachineTableFactory
-    from Tragaperras.tragaperras_logic import PAYLINES, SpinResult
-
+from tragaperras_table import SlotMachineTable, SlotMachineTableFactory
+from ragaperras_logic import PAYLINES, SpinResult
 from config import config_manager, get_text
 
 
@@ -238,8 +233,8 @@ class SlotMachineWindow(QMainWindow):
     # Creación de secciones de UI
 
     def _create_menu_bar(self) -> None:
-        menubar: QMenuBar = self.menuBar()
-        game_menu: QMenu = menubar.addMenu(get_text('game_menu'))
+        menubar = self.menuBar()
+        game_menu = menubar.addMenu(get_text('game_menu')) #type: ignore
 
         new_spin_action: QAction = game_menu.addAction(get_text('spin') + "!")
         new_spin_action.triggered.connect(self.start_spin)
@@ -665,9 +660,12 @@ class SlotMachineWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Eventos Qt
 
-    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
-        super().resizeEvent(event)
-        self._handle_resize(event)
+    def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
+        if a0 is not None:
+            super().resizeEvent(a0)
+            self._handle_resize(a0)
+        else:
+            return
 
 
 def launch_slot_machine() -> int:
