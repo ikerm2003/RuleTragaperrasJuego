@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """Pruebas para la clase :mod:`Tragaperras.tragaperras_table`."""
 
 import unittest

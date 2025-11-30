@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Tests comprehensivos para el módulo cardCommon.py
 Tests the abstract base classes and concrete implementations for cards and decks.

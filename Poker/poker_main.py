@@ -90,7 +90,7 @@ def main() -> int:
         # Embedded callers (e.g., main menu) will handle the event loop themselves.
         return 0
 
-    except Exception as exc:  # pragma: no cover - defensive logging
+    except Exception as exc:
         print(f"Error creating poker window: {exc}")
         return 1
 

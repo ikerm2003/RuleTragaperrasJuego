@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Sound Manager for Casino Game
 Manages sound effects and background music

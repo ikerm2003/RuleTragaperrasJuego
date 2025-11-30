@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Tests comprehensivos para el módulo main.py
 Tests for the main UI and application entry point.

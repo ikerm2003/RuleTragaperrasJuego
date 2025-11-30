@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Comprehensive tests for Ruleta game logic implementation
 Tests the RouletteGame, Bet, and BetType classes

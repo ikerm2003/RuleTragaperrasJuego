@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Optimization Utilities for Casino Game
 Performance and memory optimization tools

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Tests for daily refill functionality
 Tests the auto-refill system for player balance

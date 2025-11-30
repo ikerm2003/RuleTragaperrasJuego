@@ -679,7 +679,7 @@ def launch_slot_machine() -> int:
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     sys.exit(launch_slot_machine())
 
 

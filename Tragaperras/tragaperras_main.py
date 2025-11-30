@@ -20,7 +20,7 @@ for path in (ROOT_DIR, TRAGAPERRAS_DIR):
 
 if __package__:
 	from .tragaperras_ui import SlotMachineWindow
-else:  # pragma: no cover - ejecución directa
+else:
 	from Tragaperras.tragaperras_ui import SlotMachineWindow
 
 
@@ -80,7 +80,7 @@ def main() -> int:
 		if owns_app:
 			return app.exec()
 		return 0
-	except Exception as exc:  # pragma: no cover - registro defensivo
+	except Exception as exc:
 		print(f"Error al crear la ventana de tragaperras: {exc}")
 		return 1
 

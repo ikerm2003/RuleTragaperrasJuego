@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Tests comprehensivos para el módulo Blackjack
 Tests for blackjack.py game logic and UI components.

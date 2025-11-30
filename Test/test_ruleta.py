@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Tests comprehensivos para el módulo Ruleta
 Tests for ruleta.py - currently a stub module prepared for implementation.

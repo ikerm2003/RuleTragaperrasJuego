@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Achievement System for Casino Game
 Manages achievements, tracking progress, and unlocking rewards

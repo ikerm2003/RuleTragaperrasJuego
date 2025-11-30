@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Suite de tests comprehensiva para todo el proyecto RuleTragaperrasJuego
 Comprehensive test runner for all modules in the casino game collection.

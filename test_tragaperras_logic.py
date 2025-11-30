@@ -1,9 +1,9 @@
 import unittest
 
 from Tragaperras.tragaperras_logic import (
-    SlotMachine,
-    WILD_SYMBOL,
     SCATTER_SYMBOL,
+    WILD_SYMBOL,
+    SlotMachine,
 )
 
 

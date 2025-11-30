@@ -7,8 +7,9 @@ La implementación completa está en:
 - ruleta_main.py: Punto de entrada principal
 """
 
+from ..Ruleta.ruleta_logic import BetType, RouletteGame
+
 # Re-exportar para compatibilidad
 from ..Ruleta.ruleta_main import main, open_roulette_window
-from ..Ruleta.ruleta_logic import RouletteGame, BetType
 
-__all__ = ['main', 'open_roulette_window', 'RouletteGame', 'BetType']
+__all__ = ["main", "open_roulette_window", "RouletteGame", "BetType"]

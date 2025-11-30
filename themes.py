@@ -1,17 +1,17 @@
-#!/usr/bin/env python3
+
 """
 Theme System for Casino Game
 Provides customizable visual themes
 """
 
-from typing import Optional
-from enum import Enum
-from typing import Dict
 from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, Optional
 
 
 class ThemeType(Enum):
     """Available themes"""
+
     CLASSIC_GREEN = "classic_green"
     DARK = "dark"
     LIGHT = "light"
@@ -22,27 +22,28 @@ class ThemeType(Enum):
 @dataclass
 class ThemeColors:
     """Theme color scheme"""
+
     # Background colors
     bg_primary: str
     bg_secondary: str
     bg_tertiary: str
-    
+
     # Text colors
     text_primary: str
     text_secondary: str
     text_accent: str
-    
+
     # UI element colors
     button_bg: str
     button_hover: str
     button_pressed: str
     button_text: str
-    
+
     # Border and accent colors
     border_primary: str
     border_secondary: str
     accent_color: str
-    
+
     # Game-specific colors
     card_bg: str
     table_felt: str
@@ -51,15 +52,15 @@ class ThemeColors:
 
 class ThemeManager:
     """Manages visual themes"""
-    
+
     def __init__(self, config_manager):
         self.config = config_manager
         self.themes = self._initialize_themes()
-    
+
     def _initialize_themes(self) -> Dict[ThemeType, ThemeColors]:
         """Initialize all available themes"""
         themes = {}
-        
+
         # Classic Green Theme (Casino default)
         themes[ThemeType.CLASSIC_GREEN] = ThemeColors(
             bg_primary="rgba(21, 128, 61, 0.8)",
@@ -77,9 +78,9 @@ class ThemeManager:
             accent_color="#FFD700",
             card_bg="#FFFFFF",
             table_felt="#1B5E20",
-            chip_primary="#FF5722"
+            chip_primary="#FF5722",
         )
-        
+
         # Dark Theme
         themes[ThemeType.DARK] = ThemeColors(
             bg_primary="rgba(17, 24, 39, 1.0)",
@@ -97,9 +98,9 @@ class ThemeManager:
             accent_color="#60A5FA",
             card_bg="#374151",
             table_felt="#1F2937",
-            chip_primary="#EF4444"
+            chip_primary="#EF4444",
         )
-        
+
         # Light Theme
         themes[ThemeType.LIGHT] = ThemeColors(
             bg_primary="rgba(243, 244, 246, 1.0)",
@@ -117,9 +118,9 @@ class ThemeManager:
             accent_color="#2563EB",
             card_bg="#FFFFFF",
             table_felt="#E5E7EB",
-            chip_primary="#3B82F6"
+            chip_primary="#3B82F6",
         )
-        
+
         # Blue Ocean Theme
         themes[ThemeType.BLUE_OCEAN] = ThemeColors(
             bg_primary="rgba(12, 74, 110, 0.9)",
@@ -137,9 +138,9 @@ class ThemeManager:
             accent_color="#38BDF8",
             card_bg="#F0F9FF",
             table_felt="#0C4A6E",
-            chip_primary="#06B6D4"
+            chip_primary="#06B6D4",
         )
-        
+
         # Gold Luxury Theme
         themes[ThemeType.GOLD_LUXURY] = ThemeColors(
             bg_primary="rgba(120, 53, 15, 0.9)",
@@ -157,34 +158,34 @@ class ThemeManager:
             accent_color="#FACC15",
             card_bg="#FFFBEB",
             table_felt="#78350F",
-            chip_primary="#EAB308"
+            chip_primary="#EAB308",
         )
-        
+
         return themes
-    
+
     def get_current_theme(self) -> ThemeType:
         """Get the currently selected theme"""
-        theme_str = self.config.get('interface', 'theme', ThemeType.CLASSIC_GREEN.value)
+        theme_str = self.config.get("interface", "theme", ThemeType.CLASSIC_GREEN.value)
         try:
             return ThemeType(theme_str)
         except ValueError:
             return ThemeType.CLASSIC_GREEN
-    
+
     def set_theme(self, theme: ThemeType) -> None:
         """Set the current theme"""
-        self.config.set('interface', 'theme', theme.value)
+        self.config.set("interface", "theme", theme.value)
         self.config.save_config()
-    
+
     def get_theme_colors(self, theme: Optional[ThemeType] = None) -> ThemeColors:
         """Get colors for specified theme (or current theme)"""
         if theme is None:
             theme = self.get_current_theme()
         return self.themes.get(theme, self.themes[ThemeType.CLASSIC_GREEN])
-    
+
     def get_window_stylesheet(self, theme: Optional[ThemeType] = None) -> str:
         """Get main window stylesheet for theme"""
         colors = self.get_theme_colors(theme)
-        
+
         return f"""
             QMainWindow {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -192,11 +193,11 @@ class ThemeManager:
                            stop:1 {colors.bg_secondary});
             }}
         """
-    
+
     def get_button_stylesheet(self, theme: Optional[ThemeType] = None) -> str:
         """Get button stylesheet for theme"""
         colors = self.get_theme_colors(theme)
-        
+
         return f"""
             QPushButton {{
                 background: {colors.button_bg};
@@ -214,11 +215,11 @@ class ThemeManager:
                 background: {colors.button_pressed};
             }}
         """
-    
+
     def get_frame_stylesheet(self, theme: Optional[ThemeType] = None) -> str:
         """Get frame stylesheet for theme"""
         colors = self.get_theme_colors(theme)
-        
+
         return f"""
             QFrame {{
                 background: {colors.bg_tertiary};
@@ -227,25 +228,27 @@ class ThemeManager:
                 padding: 20px;
             }}
         """
-    
-    def get_label_stylesheet(self, theme: Optional[ThemeType] = None, accent: bool = False) -> str:
+
+    def get_label_stylesheet(
+        self, theme: Optional[ThemeType] = None, accent: bool = False
+    ) -> str:
         """Get label stylesheet for theme"""
         colors = self.get_theme_colors(theme)
         color = colors.text_accent if accent else colors.text_primary
-        
+
         return f"""
             QLabel {{
                 color: {color};
             }}
         """
-    
+
     def apply_theme_to_widget(self, widget, theme: Optional[ThemeType] = None) -> None:
         """Apply theme to a widget"""
         colors = self.get_theme_colors(theme)
-        
+
         # Apply appropriate stylesheet based on widget type
         widget_type = type(widget).__name__
-        
+
         if "MainWindow" in widget_type or "QMainWindow" in widget_type:
             widget.setStyleSheet(self.get_window_stylesheet(theme))
         elif "Button" in widget_type:

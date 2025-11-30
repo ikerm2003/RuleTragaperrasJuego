@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Tests comprehensivos para el módulo Poker
 Tests for poker_logic.py, poker_table.py, and related poker functionality.

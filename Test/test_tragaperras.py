@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Tests comprehensivos para el módulo Tragaperras
 Tests for tragaperras_logic.py and related slot machine functionality.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Tests for keyboard shortcuts functionality
 Tests the keyboard shortcut system in the main UI

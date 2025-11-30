@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Daily Missions System for Casino Game
 Manages daily missions, rotation, and rewards

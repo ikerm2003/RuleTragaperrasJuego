@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Comprehensive tests for Blackjack game logic implementation
 Tests the BlackjackCard, BlackjackDeck, and BlackjackGame classes

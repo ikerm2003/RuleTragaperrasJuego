@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Tests comprehensivos para el módulo config.py
 Tests for configuration management, language settings, and preferences.

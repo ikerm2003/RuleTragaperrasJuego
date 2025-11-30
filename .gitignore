@@ -10,6 +10,7 @@ venv/
 .venv/
 pip-log.txt
 pip-delete-this-directory.txt
+.github/
 pyrefly.toml
 .tox/
 .coverage
@@ -24,3 +25,5 @@ coverage.xml
 .pytest_cache
 .hypothesis
 .DS_Store
+.trunk/*
+.trunk/

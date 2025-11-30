@@ -4,19 +4,21 @@ Texas Hold'em Poker Game Logic Module
 This module contains the core game logic for Texas Hold'em poker,
 separate from the UI implementation.
 """
+
 import random
-from enum import Enum
-from dataclasses import dataclass
-from typing import List, Optional, Tuple, Dict, Any
-from collections import Counter
 import sys
+from collections import Counter
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 import cardCommon
+
 PokerCard = cardCommon.PokerCard
 PokerDeck = cardCommon.PokerDeck
 
@@ -87,10 +89,11 @@ class Player:
         is_all_in: Whether the player is all-in.
         is_human: Whether the player is a human or a bot.
     """
+
     name: str
     chips: int
     position: int
-    hand: List[PokerCard] = None #type: ignore
+    hand: List[PokerCard] = None  # type: ignore
     current_bet: int = 0
     total_bet_in_hand: int = 0
     is_active: bool = True
@@ -99,14 +102,18 @@ class Player:
     is_human: bool = False
 
     def __post_init__(self):
-        """Initialize the player's hand.
-        """
+        """Initialize the player's hand."""
         if self.hand is None:
             self.hand = []
 
     def can_act(self) -> bool:
         """Check if the player can take an action (not folded or all-in and has chips)"""
-        return self.is_active and not self.is_folded and not self.is_all_in and self.chips > 0
+        return (
+            self.is_active
+            and not self.is_folded
+            and not self.is_all_in
+            and self.chips > 0
+        )
 
     def reset_for_new_hand(self):
         """Reset player state for a new hand"""
@@ -134,6 +141,7 @@ class HandRanking(Enum):
         STRAIGHT_FLUSH : Five consecutive cards of the same suit (value: 9).
         ROYAL_FLUSH    : A, K, Q, J, 10 all of the same suit (value: 10).
     """
+
     HIGH_CARD = 1
     ONE_PAIR = 2
     TWO_PAIR = 3
@@ -185,12 +193,7 @@ class PokerTable:
             return False
 
         position = len(self.players)
-        player = Player(
-            name=name,
-            chips=chips,
-            position=position,
-            is_human=is_human
-        )
+        player = Player(name=name, chips=chips, position=position, is_human=is_human)
         self.players.append(player)
         return True
 
@@ -201,8 +204,7 @@ class PokerTable:
             target_players (Optional[int]): Desired total number of players (2-9). If None, fills to max or current+1.
         """
         if target_players is None:
-            target_players = min(
-                self.MAX_PLAYERS, max(2, len(self.players) + 1))
+            target_players = min(self.MAX_PLAYERS, max(2, len(self.players) + 1))
 
         target_players = min(target_players, self.MAX_PLAYERS)
 
@@ -296,16 +298,13 @@ class PokerTable:
         if self.phase == GamePhase.PRE_FLOP:
             if len(self.players) == 2:
                 # Heads up: big blind acts first preflop
-                self.current_player = (
-                    self.dealer_position + 1) % len(self.players)
+                self.current_player = (self.dealer_position + 1) % len(self.players)
             else:
                 # Multi-way: first player after big blind
-                self.current_player = (
-                    self.dealer_position + 3) % len(self.players)
+                self.current_player = (self.dealer_position + 3) % len(self.players)
         else:
             # Post-flop: first active player after dealer
-            self.current_player = (
-                self.dealer_position + 1) % len(self.players)
+            self.current_player = (self.dealer_position + 1) % len(self.players)
 
         # Find first player who can act
         players_checked = 0
@@ -362,11 +361,9 @@ class PokerTable:
             winner = active_players[0]
             winnings = self.pot
             winner.chips += winnings
-            self.last_hand_results = [{
-                "player": winner,
-                "name": winner.name,
-                "amount": winnings
-            }]
+            self.last_hand_results = [
+                {"player": winner, "name": winner.name, "amount": winnings}
+            ]
             self.pot = 0
             self.phase = GamePhase.FINISHED
             return self.last_hand_results
@@ -376,7 +373,8 @@ class PokerTable:
         showdown_map: Dict[int, Tuple[HandRanking, Tuple[int, ...]]] = {}
         for player in active_players:
             ranking, tiebreakers = self.evaluate_hand(
-                player.hand + self.community_cards)
+                player.hand + self.community_cards
+            )
             key = tuple(tiebreakers)
             showdown_map[player.position] = (ranking, key)
             player_hands.append((player, ranking, key))
@@ -387,8 +385,11 @@ class PokerTable:
         # Find all players with the best hand (for ties)
         best_ranking = player_hands[0][1]
         best_tiebreakers = player_hands[0][2]
-        winners = [p for p, ranking, tiebreakers in player_hands if ranking ==
-                   best_ranking and tiebreakers == best_tiebreakers]
+        winners = [
+            p
+            for p, ranking, tiebreakers in player_hands
+            if ranking == best_ranking and tiebreakers == best_tiebreakers
+        ]
 
         # Distribute pot
         pot_share = self.pot // len(winners)
@@ -401,13 +402,15 @@ class PokerTable:
                 winnings += 1
             winner.chips += winnings
             ranking_enum = showdown_map[winner.position][0]
-            results.append({
-                "player": winner,
-                "name": winner.name,
-                "amount": winnings,
-                "ranking": ranking_enum,
-                "ranking_name": self._hand_ranking_to_string(ranking_enum)
-            })
+            results.append(
+                {
+                    "player": winner,
+                    "name": winner.name,
+                    "amount": winnings,
+                    "ranking": ranking_enum,
+                    "ranking_name": self._hand_ranking_to_string(ranking_enum),
+                }
+            )
 
         self.pot = 0
         self.phase = GamePhase.FINISHED
@@ -425,21 +428,25 @@ class PokerTable:
 
         # Get all possible 5-card combinations
         from itertools import combinations
+
         best_hand = None
         best_ranking = HandRanking.HIGH_CARD
         best_tiebreakers = []
 
         for combo in combinations(cards, 5):
             ranking, tiebreakers = self._evaluate_5_card_hand(list(combo))
-            if (ranking.value > best_ranking.value or
-                    (ranking.value == best_ranking.value and tiebreakers > best_tiebreakers)):
+            if ranking.value > best_ranking.value or (
+                ranking.value == best_ranking.value and tiebreakers > best_tiebreakers
+            ):
                 best_hand = combo
                 best_ranking = ranking
                 best_tiebreakers = tiebreakers
 
         return best_ranking, best_tiebreakers
 
-    def _evaluate_5_card_hand(self, cards: List[PokerCard]) -> Tuple[HandRanking, List[int]]:
+    def _evaluate_5_card_hand(
+        self, cards: List[PokerCard]
+    ) -> Tuple[HandRanking, List[int]]:
         """Evaluate exactly 5 cards and return ranking with tiebreakers"""
         values = [card.get_numeric_value() for card in cards]
         suits = [card.suit for card in cards]
@@ -460,8 +467,7 @@ class PokerTable:
             straight_high = 5  # In low straight, 5 is the high card
 
         # Sort value counts for tiebreakers
-        counts = sorted(value_counts.items(),
-                        key=lambda x: (x[1], x[0]), reverse=True)
+        counts = sorted(value_counts.items(), key=lambda x: (x[1], x[0]), reverse=True)
 
         # Determine hand ranking
         if is_straight and is_flush:
@@ -527,7 +533,9 @@ class PokerTable:
 
         return actions
 
-    def execute_action(self, player_position: int, action: PlayerAction, amount: int = 0) -> bool:
+    def execute_action(
+        self, player_position: int, action: PlayerAction, amount: int = 0
+    ) -> bool:
         """Execute a player action. Returns True if successful."""
         if player_position != self.current_player:
             return False
@@ -545,8 +553,7 @@ class PokerTable:
         elif action == PlayerAction.CHECK:
             pass  # No action needed
         elif action == PlayerAction.CALL:
-            call_amount = min(self.current_bet -
-                              player.current_bet, player.chips)
+            call_amount = min(self.current_bet - player.current_bet, player.chips)
             player.chips -= call_amount
             player.current_bet += call_amount
             player.total_bet_in_hand += call_amount
@@ -564,8 +571,7 @@ class PokerTable:
             self.pot += raise_amount
 
             self.current_bet = player.current_bet
-            self.min_raise = raise_amount - \
-                (self.current_bet - player.current_bet)
+            self.min_raise = raise_amount - (self.current_bet - player.current_bet)
 
             if player.chips == 0:
                 player.is_all_in = True
@@ -579,7 +585,8 @@ class PokerTable:
 
             if player.current_bet > self.current_bet:
                 self.min_raise = max(
-                    self.min_raise, player.current_bet - self.current_bet)
+                    self.min_raise, player.current_bet - self.current_bet
+                )
                 self.current_bet = player.current_bet
 
         # Move to next player
@@ -604,16 +611,19 @@ class PokerTable:
         winner.chips += winnings
         self.pot = 0
         self.phase = GamePhase.FINISHED
-        self.last_hand_results = [{
-            "player": winner,
-            "name": winner.name,
-            "amount": winnings,
-            "ranking": None,
-            "ranking_name": "Ganó sin mostrar mano"
-        }]
+        self.last_hand_results = [
+            {
+                "player": winner,
+                "name": winner.name,
+                "amount": winnings,
+                "ranking": None,
+                "ranking_name": "Ganó sin mostrar mano",
+            }
+        ]
         self.betting_round_complete = True
-        self._log_hand_scores(showdown_map=None, winners=[
-                              winner], note="Ganador por abandono")
+        self._log_hand_scores(
+            showdown_map=None, winners=[winner], note="Ganador por abandono"
+        )
 
     def _next_player(self):
         """Move to the next player who can act"""
@@ -656,9 +666,11 @@ class PokerTable:
     def is_hand_over(self) -> bool:
         """Check if the current hand is over"""
         active_players = [p for p in self.players if not p.is_folded]
-        return (len(active_players) <= 1 or
-                self.phase == GamePhase.FINISHED or
-                self.phase == GamePhase.SHOWDOWN)
+        return (
+            len(active_players) <= 1
+            or self.phase == GamePhase.FINISHED
+            or self.phase == GamePhase.SHOWDOWN
+        )
 
     def _hand_ranking_to_string(self, ranking: Optional[HandRanking]) -> str:
         mapping = {
@@ -671,21 +683,21 @@ class PokerTable:
             HandRanking.FULL_HOUSE: "Full House",
             HandRanking.FOUR_OF_A_KIND: "Póker",
             HandRanking.STRAIGHT_FLUSH: "Escalera de color",
-            HandRanking.ROYAL_FLUSH: "Escalera real"
+            HandRanking.ROYAL_FLUSH: "Escalera real",
         }
         if ranking is None:
             return "Sin puntuación"
-        return mapping.get(ranking, ranking.name.replace('_', ' ').title())
+        return mapping.get(ranking, ranking.name.replace("_", " ").title())
 
     def _cards_to_text(self, cards: List[PokerCard]) -> str:
         if not cards:
             return "-"
         suit_symbols = {
-            'Corazones': '♥',
-            'Diamantes': '♦',
-            'Picas': '♠',
-            'Tréboles': '♣',
-            'Treboles': '♣'
+            "Corazones": "♥",
+            "Diamantes": "♦",
+            "Picas": "♠",
+            "Tréboles": "♣",
+            "Treboles": "♣",
         }
         parts: List[str] = []
         for card in cards:
@@ -698,10 +710,9 @@ class PokerTable:
 
     def _log_hand_scores(
         self,
-        showdown_map: Optional[Dict[int,
-                                    Tuple[HandRanking, Tuple[int, ...]]]] = None,
+        showdown_map: Optional[Dict[int, Tuple[HandRanking, Tuple[int, ...]]]] = None,
         winners: Optional[List[Player]] = None,
-        note: str = ""
+        note: str = "",
     ) -> None:
         print("\n=== Resumen de la mano ===")
         if note:
@@ -725,10 +736,13 @@ class PokerTable:
             ranking = None
             if showdown_map and player.position in showdown_map:
                 ranking = showdown_map[player.position][0]
-            elif showdown_map is None and len(self.community_cards) == 5 and len(player.hand) >= 2:
+            elif (
+                showdown_map is None
+                and len(self.community_cards) == 5
+                and len(player.hand) >= 2
+            ):
                 try:
-                    ranking, _ = self.evaluate_hand(
-                        player.hand + self.community_cards)
+                    ranking, _ = self.evaluate_hand(player.hand + self.community_cards)
                 except ValueError:
                     ranking = None
 
@@ -757,8 +771,7 @@ class PokerTable:
         elif PlayerAction.RAISE in valid_actions and random.random() < 0.2:
             # Simple raise: minimum raise or small random amount
             min_raise_total = self.current_bet + self.min_raise
-            max_raise = min(player.chips + player.current_bet,
-                            min_raise_total * 3)
+            max_raise = min(player.chips + player.current_bet, min_raise_total * 3)
             raise_amount = random.randint(min_raise_total, max_raise)
             return PlayerAction.RAISE, raise_amount
         elif PlayerAction.FOLD in valid_actions:
