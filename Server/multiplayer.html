@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Casino Multijugador</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #1a2a1a;
+      color: #e8d5a3;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 700px;
+      padding: 1rem;
+    }
+
+    h1 { text-align: center; color: #f0c040; margin-bottom: 1rem; font-size: 1.8rem; }
+
+    /* ── Estado de conexión ── */
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #0d1a0d;
+      border: 1px solid #2a4a2a;
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    #status-dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #888;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    #status-dot.connected    { background: #4caf50; }
+    #status-dot.connecting   { background: #ff9800; }
+    #status-dot.disconnected { background: #f44336; }
+
+    /* ── Panel de nombre ── */
+    #name-panel {
+      background: #0d1a0d;
+      border: 1px solid #2a4a2a;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+    #name-panel input {
+      flex: 1;
+      background: #1a2a1a;
+      border: 1px solid #3a5a3a;
+      border-radius: 6px;
+      color: #e8d5a3;
+      padding: 0.5rem 0.8rem;
+      font-size: 1rem;
+    }
+    button {
+      background: #c0922a;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: background 0.2s;
+    }
+    button:hover  { background: #e0b040; }
+    button:disabled { background: #555; cursor: default; }
+
+    /* ── Lista de jugadores ── */
+    #players-section h2, #chat-section h2 {
+      color: #f0c040;
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    #players-list {
+      list-style: none;
+      background: #0d1a0d;
+      border: 1px solid #2a4a2a;
+      border-radius: 8px;
+      padding: 0.6rem;
+      margin-bottom: 1rem;
+      min-height: 60px;
+    }
+    #players-list li {
+      padding: 0.3rem 0.5rem;
+      border-bottom: 1px solid #1a2a1a;
+      font-size: 0.9rem;
+    }
+    #players-list li:last-child { border-bottom: none; }
+    #players-list li.me { color: #f0c040; font-weight: bold; }
+
+    /* ── Chat ── */
+    #chat-log {
+      background: #0d1a0d;
+      border: 1px solid #2a4a2a;
+      border-radius: 8px;
+      padding: 0.6rem;
+      height: 220px;
+      overflow-y: auto;
+      margin-bottom: 0.5rem;
+      font-size: 0.88rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .chat-msg       { color: #ccc; }
+    .chat-msg .who  { color: #f0c040; font-weight: bold; }
+    .chat-msg.system { color: #aaa; font-style: italic; }
+
+    #chat-input-row { display: flex; gap: 0.5rem; }
+    #chat-input {
+      flex: 1;
+      background: #1a2a1a;
+      border: 1px solid #3a5a3a;
+      border-radius: 6px;
+      color: #e8d5a3;
+      padding: 0.5rem 0.8rem;
+      font-size: 0.95rem;
+    }
+
+    /* ── Token debug ── */
+    #token-info {
+      margin-top: 1rem;
+      font-size: 0.7rem;
+      color: #555;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <h1>🎰 Casino Multijugador</h1>
+
+  <!-- Barra de estado -->
+  <div id="status-bar">
+    <div id="status-dot" class="disconnected"></div>
+    <span id="status-text">Desconectado</span>
+  </div>
+
+  <!-- Nombre -->
+  <div id="name-panel">
+    <input id="name-input" type="text" maxlength="20"
+           placeholder="Tu nombre de jugador…" />
+    <button id="name-btn" disabled>Establecer nombre</button>
+  </div>
+
+  <!-- Jugadores -->
+  <section id="players-section">
+    <h2>Jugadores conectados (<span id="player-count">0</span>/9)</h2>
+    <ul id="players-list"></ul>
+  </section>
+
+  <!-- Chat -->
+  <section id="chat-section">
+    <h2>Chat</h2>
+    <div id="chat-log"></div>
+    <div id="chat-input-row">
+      <input id="chat-input" type="text" maxlength="300"
+             placeholder="Escribe un mensaje…" disabled />
+      <button id="send-btn" disabled>Enviar</button>
+    </div>
+  </section>
+
+  <div id="token-info"></div>
+</div>
+
+<script>
+/**
+ * Cliente WebSocket con token de sesión por pestaña.
+ *
+ * Mecanismo anti-duplicado:
+ *   1. El token se guarda en `sessionStorage` → es exclusivo de esta
+ *      pestaña/ventana (no se comparte entre pestañas ni en localStorage).
+ *   2. La variable `ws` del módulo impide crear un segundo WebSocket dentro
+ *      de la misma pestaña mientras el primero está abierto.
+ *   3. El servidor rechaza un token que ya tiene una conexión activa
+ *      (o cierra la conexión anterior si es una reconexión legítima).
+ */
+(function () {
+  'use strict';
+
+  const SERVER_URL   = 'ws://localhost:8765';
+  const TOKEN_KEY    = 'casino_session_token';
+  const RECONNECT_MS = 3000;
+
+  // ── Estado del módulo ──────────────────────────────────────────────────
+  let ws      = null;   // única instancia WebSocket para esta pestaña
+  let myToken = sessionStorage.getItem(TOKEN_KEY) || '';
+  let myName  = '';
+
+  // ── Referencias al DOM ────────────────────────────────────────────────
+  const statusDot   = document.getElementById('status-dot');
+  const statusText  = document.getElementById('status-text');
+  const nameInput   = document.getElementById('name-input');
+  const nameBtn     = document.getElementById('name-btn');
+  const playerCount = document.getElementById('player-count');
+  const playersList = document.getElementById('players-list');
+  const chatLog     = document.getElementById('chat-log');
+  const chatInput   = document.getElementById('chat-input');
+  const sendBtn     = document.getElementById('send-btn');
+  const tokenInfo   = document.getElementById('token-info');
+
+  // ── Utilidades de UI ──────────────────────────────────────────────────
+  function setStatus(state, text) {
+    statusDot.className = state;
+    statusText.textContent = text;
+  }
+
+  function appendChat(html, isSystem = false) {
+    const div = document.createElement('div');
+    div.className = 'chat-msg' + (isSystem ? ' system' : '');
+    div.innerHTML = html;
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  function renderPlayers(players) {
+    playersList.innerHTML = '';
+    players.forEach(p => {
+      const li = document.createElement('li');
+      li.textContent = p.name;
+      if (p.token === myToken) li.classList.add('me');
+      playersList.appendChild(li);
+    });
+    playerCount.textContent = players.length;
+  }
+
+  function enableChat(enabled) {
+    chatInput.disabled = !enabled;
+    sendBtn.disabled   = !enabled;
+    nameBtn.disabled   = !enabled;
+  }
+
+  // ── Conexión WebSocket ────────────────────────────────────────────────
+  function connect() {
+    // Guardia: nunca crear dos WebSockets en la misma pestaña
+    if (ws && (ws.readyState === WebSocket.CONNECTING ||
+               ws.readyState === WebSocket.OPEN)) {
+      console.warn('[casino] Ya existe una conexión activa en esta pestaña.');
+      return;
+    }
+
+    setStatus('connecting', 'Conectando…');
+    ws = new WebSocket(SERVER_URL);
+
+    ws.onopen = () => {
+      // Enviar handshake con el token existente (o null si es la primera vez)
+      ws.send(JSON.stringify({ type: 'handshake', token: myToken || null }));
+    };
+
+    ws.onmessage = (event) => {
+      let msg;
+      try { msg = JSON.parse(event.data); }
+      catch { return; }
+      handleMessage(msg);
+    };
+
+    ws.onerror = () => {
+      setStatus('disconnected', 'Error de conexión');
+    };
+
+    ws.onclose = (event) => {
+      ws = null;
+      enableChat(false);
+
+      if (event.code === 1008) {
+        // Sala llena — no reintentar
+        setStatus('disconnected', 'Sala llena (máx. 9 jugadores)');
+        appendChat('⚠️ La sala está llena. Inténtalo más tarde.', true);
+        return;
+      }
+      if (event.code === 1002) {
+        // Error de protocolo — no reintentar
+        setStatus('disconnected', 'Error de protocolo');
+        return;
+      }
+
+      setStatus('disconnected', `Desconectado — reconectando en ${RECONNECT_MS / 1000}s…`);
+      setTimeout(connect, RECONNECT_MS);
+    };
+  }
+
+  // ── Manejo de mensajes del servidor ──────────────────────────────────
+  function handleMessage(msg) {
+    switch (msg.type) {
+
+      case 'handshake_ack':
+        myToken = msg.token;
+        myName  = msg.name || myName;
+        sessionStorage.setItem(TOKEN_KEY, myToken);
+        tokenInfo.textContent = `Tab token: ${myToken}`;
+
+        setStatus('connected', `Conectado como "${myName}"`);
+        enableChat(true);
+        nameInput.value = myName;
+        renderPlayers(msg.players || []);
+        appendChat(`✅ Conectado. Eres <strong>${myName}</strong>.`, true);
+        break;
+
+      case 'player_joined':
+        renderPlayers(msg.players || []);
+        if (msg.token !== myToken)
+          appendChat(`👤 <span class="who">${esc(msg.name)}</span> se ha unido.`, true);
+        break;
+
+      case 'player_updated':
+        renderPlayers(msg.players || []);
+        if (msg.token === myToken) {
+          myName = msg.name;
+          setStatus('connected', `Conectado como "${myName}"`);
+        }
+        break;
+
+      case 'player_left':
+        renderPlayers(msg.players || []);
+        appendChat(`👋 <span class="who">${esc(msg.name)}</span> se ha ido.`, true);
+        break;
+
+      case 'chat':
+        appendChat(`<span class="who">${esc(msg.from)}</span>: ${esc(msg.text)}`);
+        break;
+
+      case 'error':
+        appendChat(`⚠️ Error del servidor: ${esc(msg.reason)}`, true);
+        break;
+
+      default:
+        console.debug('[casino] Mensaje desconocido:', msg);
+    }
+  }
+
+  // ── Enviar nombre ─────────────────────────────────────────────────────
+  nameBtn.addEventListener('click', () => {
+    const name = nameInput.value.trim();
+    if (!name || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'set_name', name }));
+  });
+
+  nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') nameBtn.click();
+  });
+
+  // ── Enviar chat ───────────────────────────────────────────────────────
+  sendBtn.addEventListener('click', sendChat);
+  chatInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendChat();
+  });
+
+  function sendChat() {
+    const text = chatInput.value.trim();
+    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'chat', text }));
+    chatInput.value = '';
+  }
+
+  // ── Limpieza al cerrar/recargar la pestaña ────────────────────────────
+  window.addEventListener('beforeunload', () => {
+    if (ws) ws.close(1000, 'Tab closed');
+  });
+
+  // ── Iniciar ───────────────────────────────────────────────────────────
+  connect();
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+}());
+</script>
+</body>
+</html>
