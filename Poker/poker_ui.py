@@ -51,16 +51,21 @@ from PyQt6.QtWidgets import (
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
+PACKAGE_PARENT_DIR = ROOT_DIR.parent
+for path_entry in (PACKAGE_PARENT_DIR, ROOT_DIR):
+    str_path = str(path_entry)
+    if str_path not in sys.path:
+        sys.path.insert(0, str_path)
 
-import cardCommon
+from RuleTragaperrasJuego import cardCommon
+from RuleTragaperrasJuego.game_events import GameRoundEvent, get_game_event_service
+from RuleTragaperrasJuego.sound_manager import get_sound_manager
 
 from .poker_logic import GamePhase, Player, PlayerAction
 from .poker_table import BasePokerTable, NinePlayerTable
 
 PokerCard = cardCommon.PokerCard
-import config
+from RuleTragaperrasJuego import config
 
 config_manager = config.config_manager
 get_text = config.get_text
@@ -80,8 +85,12 @@ class PokerWindow(QMainWindow):
     ):
         super().__init__(parent)
 
+        # Qt puede emitir resizeEvent durante la construcción; la caché debe existir antes.
+        self._card_pixmap_cache: Dict[tuple[str, str, int, int], QPixmap] = {}
+
         # Initialize config system
         self.config = config_manager
+        self.sound_manager = get_sound_manager(self.config)
 
         # Base dimensions for scaling
         self.base_width = 1400
@@ -130,6 +139,14 @@ class PokerWindow(QMainWindow):
         self.create_menu_bar()
         self.init_ui()
         self.start_new_game()
+
+    def _play_sound(self, method_name: str, *args, **kwargs) -> None:
+        manager = self.sound_manager
+        if manager is None:
+            return
+        callback = getattr(manager, method_name, None)
+        if callable(callback):
+            callback(*args, **kwargs)
 
     def create_menu_bar(self):
         """Create menu bar with settings option"""
@@ -528,6 +545,10 @@ class PokerWindow(QMainWindow):
 
         success = self.table.execute_action(self.table.current_player, action, amount)
         if success:
+            if action in (PlayerAction.CALL, PlayerAction.RAISE, PlayerAction.ALL_IN):
+                self._play_sound("play_chip_place")
+            elif action in (PlayerAction.CHECK, PlayerAction.FOLD):
+                self._play_sound("play_button_click")
             self.schedule_bot_action_if_needed()
         else:
             # Si la acción no fue válida, vuelve a mostrar las opciones disponibles
@@ -850,7 +871,7 @@ class PokerWindow(QMainWindow):
                 self.animate_pot_update()
 
         if self.phase_label:
-            self.phase_label.setText(self.table.phase.value)
+            self._set_label_text_if_changed(self.phase_label, self.table.phase.value)
 
         # Update community cards with animations
         self.update_community_cards()
@@ -858,19 +879,57 @@ class PokerWindow(QMainWindow):
         # Update player displays
         self.update_player_displays()
 
+    def _set_label_text_if_changed(self, label: QLabel, text: str):
+        """Avoid redundant text updates on labels."""
+        if label.text() != text:
+            label.setText(text)
+
+    def _set_label_style_if_changed(self, label: QLabel, style: str):
+        """Avoid redundant stylesheet updates on labels."""
+        if label.property("_last_style") != style:
+            label.setStyleSheet(style)
+            label.setProperty("_last_style", style)
+
+    def _set_card_label_state(
+        self,
+        label: QLabel,
+        card_key: tuple[Any, ...],
+        pixmap: QPixmap,
+        text: str,
+        style: str,
+    ):
+        """Update a card label only when state changes."""
+        if label.property("_last_card_key") != card_key:
+            label.setPixmap(pixmap)
+            label.setProperty("_last_card_key", card_key)
+
+        self._set_label_text_if_changed(label, text)
+        self._set_label_style_if_changed(label, style)
+
     def update_community_cards(self):
         """Update community card displays"""
         for i, card_label in enumerate(self.community_card_labels):
             if i < len(self.table.community_cards):
                 card = self.table.community_cards[i]
                 pixmap = self.load_card_image(card)
-                card_label.setPixmap(pixmap)
-                card_label.setText("")
-                card_label.setStyleSheet("")
+                card_key = (
+                    "community",
+                    i,
+                    str(card.value),
+                    str(card.suit),
+                    self.get_scaled_size(70),
+                    self.get_scaled_size(100),
+                )
+                self._set_card_label_state(card_label, card_key, pixmap, "", "")
             else:
-                card_label.setPixmap(QPixmap())
-                card_label.setText("?")
-                card_label.setStyleSheet(self.get_card_back_style())
+                back_style = self.get_card_back_style()
+                back_key = (
+                    "community_back",
+                    i,
+                    self.get_scaled_size(70),
+                    self.get_scaled_size(100),
+                )
+                self._set_card_label_state(card_label, back_key, QPixmap(), "?", back_style)
 
     def update_player_displays(self):
         """Update all player displays"""
@@ -888,7 +947,7 @@ class PokerWindow(QMainWindow):
 
                 # Update chips and bet with enhanced display
                 if hasattr(frame, "chips_label"):
-                    frame.chips_label.setText(f"${player.chips}")
+                    self._set_label_text_if_changed(frame.chips_label, f"${player.chips}")
 
                 # Enhanced bet display with total bet information
                 current_bet = player.current_bet
@@ -912,15 +971,19 @@ class PokerWindow(QMainWindow):
                     bet_text = "Bet: $0"
 
                 if hasattr(frame, "bet_label"):
-                    frame.bet_label.setText(bet_text)
+                    self._set_label_text_if_changed(frame.bet_label, bet_text)
 
                 # Update player state styling
                 if i == self.table.current_player and not self.table.is_hand_over():
-                    frame.setStyleSheet(self.get_player_frame_style("highlight"))
+                    frame_style = self.get_player_frame_style("highlight")
                 elif player.is_folded:
-                    frame.setStyleSheet(self.get_player_frame_style("folded"))
+                    frame_style = self.get_player_frame_style("folded")
                 else:
-                    frame.setStyleSheet(self.get_player_frame_style())
+                    frame_style = self.get_player_frame_style()
+
+                if frame.property("_last_style") != frame_style:
+                    frame.setStyleSheet(frame_style)
+                    frame.setProperty("_last_style", frame_style)
 
                 # Update cards
                 reveal_cards = len(player.hand) >= 2 and (
@@ -931,18 +994,42 @@ class PokerWindow(QMainWindow):
                         if reveal_cards and j < len(player.hand):
                             card = player.hand[j]
                             pixmap = self.load_card_image(card)
-                            card_label.setPixmap(pixmap)
-                            card_label.setText("")
-                            card_label.setStyleSheet("")
+                            card_key = (
+                                "player",
+                                i,
+                                j,
+                                str(card.value),
+                                str(card.suit),
+                                self.get_scaled_size(70),
+                                self.get_scaled_size(100),
+                            )
+                            self._set_card_label_state(card_label, card_key, pixmap, "", "")
                         else:
-                            card_label.setPixmap(QPixmap())
-                            card_label.setText("?")
-                            card_label.setStyleSheet(self.get_card_back_style())
+                            back_style = self.get_card_back_style()
+                            back_key = (
+                                "player_back",
+                                i,
+                                j,
+                                self.get_scaled_size(70),
+                                self.get_scaled_size(100),
+                            )
+                            self._set_card_label_state(
+                                card_label,
+                                back_key,
+                                QPixmap(),
+                                "?",
+                                back_style,
+                            )
 
     def load_card_image(self, card: PokerCard) -> QPixmap:
         """Create a visual representation of a card"""
         card_width = self.get_scaled_size(70)
         card_height = self.get_scaled_size(100)
+
+        cache_key = (str(card.value), str(card.suit), card_width, card_height)
+        cached = self._card_pixmap_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         pixmap = QPixmap(card_width, card_height)
         pixmap.fill(QColor(255, 255, 255))
@@ -994,12 +1081,14 @@ class PokerWindow(QMainWindow):
         )
 
         painter.end()
+        self._card_pixmap_cache[cache_key] = pixmap
         return pixmap
 
     # Event callbacks
     def on_hand_started(self):
         """Called when a new hand starts"""
         self.reveal_all_hands = False
+        self._play_sound("play_card_deal")
         self.update_display()
         self.schedule_bot_action_if_needed()
 
@@ -1046,7 +1135,55 @@ class PokerWindow(QMainWindow):
         else:
             message = "La mano ha terminado."
 
+        self._record_round_progress(results)
+
+        human_won = False
+        if isinstance(results, list):
+            for info in results:
+                if not isinstance(info, dict):
+                    continue
+                player_obj = info.get("player")
+                amount = info.get("amount", 0)
+                if getattr(player_obj, "is_human", False) and isinstance(amount, (int, float)):
+                    human_won = amount > 0
+                    break
+        if human_won:
+            self._play_sound("play_win")
+        else:
+            self._play_sound("play_lose")
+
         QMessageBox.information(self, "Mano finalizada", message)
+
+    def _record_round_progress(self, results=None) -> None:
+        """Reporta el resultado de la mano del jugador humano al servicio unificado."""
+        human_player = next((p for p in self.table.players if p.is_human), None)
+        if human_player is None:
+            return
+
+        wagered = max(0, int(getattr(human_player, "total_bet_in_hand", 0)))
+        human_win = 0
+        if isinstance(results, list):
+            for info in results:
+                if not isinstance(info, dict):
+                    continue
+                player_obj = info.get("player")
+                if getattr(player_obj, "is_human", False):
+                    amount = info.get("amount", 0)
+                    if isinstance(amount, (int, float)):
+                        human_win += int(amount)
+
+        net_win = human_win - wagered
+        try:
+            get_game_event_service().record_round(
+                GameRoundEvent(
+                    game_type="poker",
+                    rounds_played=1,
+                    wagered=wagered,
+                    net_win=net_win,
+                )
+            )
+        except Exception:
+            pass
 
     # Styling methods
     def get_scaled_size(self, base_size: int) -> int:
@@ -1171,9 +1308,15 @@ class PokerWindow(QMainWindow):
             }
         """
 
-    def resizeEvent(self, event: QResizeEvent):
+    def resizeEvent(self, a0: Optional[QResizeEvent]):
         """Handle window resize for responsive scaling"""
-        super().resizeEvent(event)
+        if a0 is None:
+            return
+        super().resizeEvent(a0)
+
+        if not hasattr(self, "_card_pixmap_cache"):
+            self._card_pixmap_cache = {}
+
         current_size = self.size()
         width_scale = current_size.width() / self.base_width
         height_scale = current_size.height() / self.base_height
@@ -1181,6 +1324,8 @@ class PokerWindow(QMainWindow):
 
         if abs(new_scale - self.current_scale) > 0.05:
             self.current_scale = new_scale
+            # Evita acumulación de pixmaps con tamaños antiguos.
+            self._card_pixmap_cache.clear()
             self.update_ui_scaling()
 
     def update_ui_scaling(self):

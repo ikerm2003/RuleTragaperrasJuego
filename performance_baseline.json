@@ -1,0 +1,61 @@
+{
+  "snapshots": [
+    {
+      "timestamp": "2026-03-13T09:44:24",
+      "source": "blackjack",
+      "metrics": {
+        "ui.blackjack.deal_ms": {
+          "count": 4,
+          "avg_ms": 93.239,
+          "min_ms": 0.875,
+          "max_ms": 368.769,
+          "p95_ms": 1.678,
+          "threshold_ms": 40.0,
+          "within_threshold": false
+        },
+        "ui.blackjack.stand_ms": {
+          "count": 3,
+          "avg_ms": 1.178,
+          "min_ms": 0.694,
+          "max_ms": 1.495,
+          "p95_ms": 1.345,
+          "threshold_ms": 35.0,
+          "within_threshold": true
+        },
+        "ui.blackjack.hit_ms": {
+          "count": 1,
+          "avg_ms": 0.475,
+          "min_ms": 0.475,
+          "max_ms": 0.475,
+          "p95_ms": 0.475,
+          "threshold_ms": 30.0,
+          "within_threshold": true
+        }
+      }
+    },
+    {
+      "timestamp": "2026-03-13T09:44:47",
+      "source": "tragaperras",
+      "metrics": {
+        "ui.slots.render_result_ms": {
+          "count": 1,
+          "avg_ms": 1.892,
+          "min_ms": 1.892,
+          "max_ms": 1.892,
+          "p95_ms": 1.892,
+          "threshold_ms": 25.0,
+          "within_threshold": true
+        },
+        "ui.slots.spin_end_to_end_ms": {
+          "count": 1,
+          "avg_ms": 1261.525,
+          "min_ms": 1261.525,
+          "max_ms": 1261.525,
+          "p95_ms": 1261.525,
+          "threshold_ms": 2400.0,
+          "within_threshold": true
+        }
+      }
+    }
+  ]
+}

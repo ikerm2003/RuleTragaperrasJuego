@@ -187,7 +187,7 @@ class TestBlackjackGameLogic(unittest.TestCase):
         
         self.assertEqual(len(self.game.player_hand), 2)
         self.assertEqual(len(self.game.dealer_hand), 2)
-        self.assertEqual(self.game.state, GameState.PLAYER_TURN)
+        self.assertIn(self.game.state, [GameState.PLAYER_TURN, GameState.BETTING])
     
     def test_can_double(self):
         """Test double down conditions"""
@@ -220,7 +220,7 @@ class TestBlackjackGamePlay(unittest.TestCase):
         """Test that stand moves to dealer turn"""
         if not self.game.is_blackjack(self.game.player_hand):
             self.game.stand()
-            self.assertEqual(self.game.state, GameState.GAME_OVER)
+            self.assertEqual(self.game.state, GameState.BETTING)
     
     def test_bust_detection(self):
         """Test that busting is detected"""
@@ -232,6 +232,136 @@ class TestBlackjackGamePlay(unittest.TestCase):
         ]
         value = self.game.calculate_hand_value(self.game.player_hand)
         self.assertGreater(value, 21)
+
+    def test_take_insurance_available_with_dealer_ace(self):
+        """Insurance can be taken when dealer upcard is Ace"""
+        self.game.player_hand = [
+            BlackjackCard('10', 'Hearts'),
+            BlackjackCard('9', 'Clubs')
+        ]
+        self.game.dealer_hand = [
+            BlackjackCard('A', 'Spades'),
+            BlackjackCard('7', 'Diamonds')
+        ]
+        self.game.state = GameState.PLAYER_TURN
+
+        self.assertTrue(self.game.can_take_insurance())
+        initial_balance = self.game.balance
+        result = self.game.take_insurance()
+
+        self.assertTrue(result)
+        self.assertEqual(self.game.insurance_bet, self.game.current_bet // 2)
+        self.assertEqual(self.game.balance, initial_balance - self.game.insurance_bet)
+
+    def test_split_creates_two_hands_and_deducts_bet(self):
+        """Split should create two hands and deduct additional bet"""
+        game = BlackjackGame(initial_balance=1000)
+        self.assertTrue(game.place_bet(100))
+        game.state = GameState.PLAYER_TURN
+        game.player_hand = [
+            BlackjackCard('8', 'Hearts'),
+            BlackjackCard('8', 'Clubs')
+        ]
+        game.dealer_hand = [
+            BlackjackCard('6', 'Spades'),
+            BlackjackCard('10', 'Diamonds')
+        ]
+
+        initial_balance = game.balance
+        self.assertTrue(game.can_split())
+        self.assertTrue(game.split_hand())
+
+        self.assertTrue(game.split_mode)
+        self.assertEqual(len(game.split_hands), 2)
+        self.assertEqual(len(game.split_hands[0]), 2)
+        self.assertEqual(len(game.split_hands[1]), 2)
+        self.assertEqual(game.current_hand_index, 0)
+        self.assertEqual(game.balance, initial_balance - 100)
+
+    def test_split_stand_advances_to_second_hand(self):
+        """Standing first split hand should move turn to second hand"""
+        game = BlackjackGame(initial_balance=1000)
+        self.assertTrue(game.place_bet(100))
+        game.state = GameState.PLAYER_TURN
+        game.player_hand = [
+            BlackjackCard('9', 'Hearts'),
+            BlackjackCard('9', 'Clubs')
+        ]
+        game.dealer_hand = [
+            BlackjackCard('7', 'Spades'),
+            BlackjackCard('10', 'Diamonds')
+        ]
+
+        self.assertTrue(game.split_hand())
+        self.assertTrue(game.stand())
+
+        self.assertEqual(game.state, GameState.PLAYER_TURN)
+        self.assertEqual(game.current_hand_index, 1)
+
+    def test_split_two_stands_resolve_round(self):
+        """Standing both split hands should resolve round and return to betting"""
+        game = BlackjackGame(initial_balance=1000)
+        self.assertTrue(game.place_bet(100))
+        game.state = GameState.PLAYER_TURN
+        game.player_hand = [
+            BlackjackCard('7', 'Hearts'),
+            BlackjackCard('7', 'Clubs')
+        ]
+        game.dealer_hand = [
+            BlackjackCard('6', 'Spades'),
+            BlackjackCard('9', 'Diamonds')
+        ]
+
+        self.assertTrue(game.split_hand())
+        self.assertTrue(game.stand())
+        self.assertTrue(game.stand())
+
+        self.assertEqual(game.state, GameState.BETTING)
+        self.assertTrue(game.hand_resolved)
+        self.assertNotEqual(game.last_result, "")
+
+    def test_insurance_payout_when_dealer_has_blackjack(self):
+        """Insurance pays correctly when dealer has blackjack"""
+        game = BlackjackGame(initial_balance=1000)
+        self.assertTrue(game.place_bet(100))
+
+        game.player_hand = [
+            BlackjackCard('10', 'Hearts'),
+            BlackjackCard('Q', 'Clubs')
+        ]
+        game.dealer_hand = [
+            BlackjackCard('A', 'Spades'),
+            BlackjackCard('K', 'Diamonds')
+        ]
+        game.state = GameState.PLAYER_TURN
+
+        self.assertTrue(game.take_insurance())
+        result, winnings = game.resolve_hand()
+
+        self.assertIn('Seguro ganado', result)
+        self.assertEqual(winnings, 150)
+        self.assertEqual(game.balance, 1000)
+
+    def test_resolve_hand_is_idempotent(self):
+        """Calling resolve_hand twice should not alter balance twice"""
+        game = BlackjackGame(initial_balance=1000)
+        self.assertTrue(game.place_bet(100))
+        game.player_hand = [
+            BlackjackCard('10', 'Hearts'),
+            BlackjackCard('9', 'Clubs')
+        ]
+        game.dealer_hand = [
+            BlackjackCard('10', 'Spades'),
+            BlackjackCard('7', 'Diamonds')
+        ]
+
+        result_1, winnings_1 = game.resolve_hand()
+        balance_after_first = game.balance
+        result_2, winnings_2 = game.resolve_hand()
+
+        self.assertEqual(result_1, result_2)
+        self.assertEqual(winnings_1, winnings_2)
+        self.assertEqual(game.balance, balance_after_first)
 
 
 if __name__ == '__main__':

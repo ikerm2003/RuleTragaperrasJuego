@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
-from config import (
+from RuleTragaperrasJuego.config import (
     ConfigManager, Language, Resolution, AnimationSpeed, 
     get_text, config_manager
 )
@@ -146,9 +146,51 @@ class ConfigDialog(QDialog):
         
         self.tooltips_check = QCheckBox("Mostrar tooltips")
         self.sound_check = QCheckBox(get_text('sound'))
+        self.debug_mode_check = QCheckBox("Activar modo debug")
+        self.master_volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.master_volume_slider.setRange(0, 100)
+        self.master_volume_slider.setValue(70)
+        self.master_volume_label = QLabel("70%")
+        self.master_volume_slider.valueChanged.connect(
+            lambda value: self.master_volume_label.setText(f"{value}%")
+        )
+
+        self.sfx_mute_check = QCheckBox("Silenciar SFX")
+        self.sfx_volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.sfx_volume_slider.setRange(0, 100)
+        self.sfx_volume_slider.setValue(100)
+        self.sfx_volume_label = QLabel("100%")
+        self.sfx_volume_slider.valueChanged.connect(
+            lambda value: self.sfx_volume_label.setText(f"{value}%")
+        )
+
+        self.music_mute_check = QCheckBox("Silenciar música")
+        self.music_volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.music_volume_slider.setRange(0, 100)
+        self.music_volume_slider.setValue(80)
+        self.music_volume_label = QLabel("80%")
+        self.music_volume_slider.valueChanged.connect(
+            lambda value: self.music_volume_label.setText(f"{value}%")
+        )
+
+        self.sound_check.toggled.connect(
+            lambda enabled: self._set_audio_controls_enabled(enabled)
+        )
         
         other_layout.addWidget(self.tooltips_check, 0, 0)
         other_layout.addWidget(self.sound_check, 1, 0)
+        other_layout.addWidget(self.debug_mode_check, 2, 0)
+        other_layout.addWidget(QLabel("Volumen maestro:"), 3, 0)
+        other_layout.addWidget(self.master_volume_slider, 3, 1)
+        other_layout.addWidget(self.master_volume_label, 3, 2)
+
+        other_layout.addWidget(self.sfx_mute_check, 4, 0)
+        other_layout.addWidget(self.sfx_volume_slider, 4, 1)
+        other_layout.addWidget(self.sfx_volume_label, 4, 2)
+
+        other_layout.addWidget(self.music_mute_check, 5, 0)
+        other_layout.addWidget(self.music_volume_slider, 5, 1)
+        other_layout.addWidget(self.music_volume_label, 5, 2)
         
         layout.addWidget(other_group)
         layout.addStretch()
@@ -249,6 +291,21 @@ class ConfigDialog(QDialog):
         
         self.tooltips_check.setChecked(self.config.get('interface', 'show_tooltips', True))
         self.sound_check.setChecked(self.config.get('interface', 'sound_enabled', True))
+        self.debug_mode_check.setChecked(self.config.get('interface', 'debug_mode', False))
+        master_volume = int(float(self.config.get('interface', 'sound_volume', 0.7)) * 100)
+        self.master_volume_slider.setValue(master_volume)
+        self.master_volume_label.setText(f"{master_volume}%")
+
+        sfx_volume = int(float(self.config.get('interface', 'sfx_volume', 1.0)) * 100)
+        self.sfx_volume_slider.setValue(sfx_volume)
+        self.sfx_volume_label.setText(f"{sfx_volume}%")
+        self.sfx_mute_check.setChecked(self.config.get('interface', 'sfx_muted', False))
+
+        music_volume = int(float(self.config.get('interface', 'music_volume', 0.8)) * 100)
+        self.music_volume_slider.setValue(music_volume)
+        self.music_volume_label.setText(f"{music_volume}%")
+        self.music_mute_check.setChecked(self.config.get('interface', 'music_muted', False))
+        self._set_audio_controls_enabled(self.sound_check.isChecked())
         
         # Gameplay settings
         timeout = self.config.get('gameplay', 'auto_fold_timeout', 30)
@@ -280,6 +337,14 @@ class ConfigDialog(QDialog):
                 'card_animation_enabled': self.animations_check.isChecked(),
                 'show_tooltips': self.tooltips_check.isChecked(),
                 'sound_enabled': self.sound_check.isChecked(),
+                'debug_mode': self.debug_mode_check.isChecked(),
+                'sound_volume': self.master_volume_slider.value() / 100.0,
+                'sfx_enabled': True,
+                'sfx_volume': self.sfx_volume_slider.value() / 100.0,
+                'sfx_muted': self.sfx_mute_check.isChecked(),
+                'music_enabled': True,
+                'music_volume': self.music_volume_slider.value() / 100.0,
+                'music_muted': self.music_mute_check.isChecked(),
             },
             'gameplay': {
                 'auto_fold_timeout': self.timeout_slider.value(),
@@ -287,6 +352,13 @@ class ConfigDialog(QDialog):
                 'show_probability_hints': self.probability_hints_check.isChecked(),
             }
         }
+
+    def _set_audio_controls_enabled(self, enabled: bool) -> None:
+        self.master_volume_slider.setEnabled(enabled)
+        self.sfx_mute_check.setEnabled(enabled)
+        self.sfx_volume_slider.setEnabled(enabled)
+        self.music_mute_check.setEnabled(enabled)
+        self.music_volume_slider.setEnabled(enabled)
     
     def apply_settings(self):
         """Apply the current settings"""

@@ -81,6 +81,19 @@ class PerformanceMonitor:
                 report += "-" * 60 + "\n"
         
         return report
+
+    def record_measurement(self, metric_name: str, value_ms: float) -> None:
+        """Record a manual metric sample expressed in milliseconds."""
+        if not self.enabled:
+            return
+
+        if metric_name not in self.metrics:
+            self.metrics[metric_name] = []
+
+        self.metrics[metric_name].append(value_ms)
+        # Keep only last 100 measurements
+        if len(self.metrics[metric_name]) > 100:
+            self.metrics[metric_name] = self.metrics[metric_name][-100:]
     
     def clear_metrics(self):
         """Clear all collected metrics"""

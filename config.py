@@ -5,6 +5,7 @@ Handles settings for UI, animations, language, and display options.
 import json
 import os
 import copy
+from contextlib import contextmanager
 from typing import Dict, Any, Optional
 from enum import Enum
 from datetime import datetime
@@ -42,6 +43,14 @@ class ConfigManager:
             'show_tooltips': True,
             'card_animation_enabled': True,
             'sound_enabled': True,
+            'sound_volume': 0.7,
+            'sfx_enabled': True,
+            'sfx_volume': 1.0,
+            'sfx_muted': False,
+            'music_enabled': True,
+            'music_volume': 0.8,
+            'music_muted': False,
+            'debug_mode': False,
         },
         'gameplay': {
             'auto_fold_timeout': 30,
@@ -55,6 +64,7 @@ class ConfigManager:
             'last_login': None,
             'current_balance': 1000,
             'practice_balance': 10000,
+            'username': None,  # populated when logged in via PostgreSQL
         },
         'statistics': {
             'total_hands_played': 0,
@@ -82,10 +92,18 @@ class ConfigManager:
     def __init__(self, config_file: str = 'casino_config.json'):
         self.config_file = config_file
         self.config = copy.deepcopy(self.DEFAULT_CONFIG)
+        self._batch_depth = 0
+        self._pending_save = False
+        # PostgreSQL per-user state (None → offline/JSON mode)
+        self._db_user_id: Optional[int] = None
+        self._db_username: Optional[str] = None
         self.load_config()
     
     def load_config(self) -> None:
-        """Load configuration from file"""
+        """Load configuration from file (or PostgreSQL when logged in)."""
+        if self._db_user_id is not None:
+            self._load_from_postgresql()
+            return
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
@@ -95,7 +113,14 @@ class ConfigManager:
                 print(f"Error loading config: {e}. Using defaults.")
     
     def save_config(self) -> bool:
-        """Save current configuration to file"""
+        """Save configuration to PostgreSQL (logged in) or JSON file (offline)."""
+        if self._batch_depth > 0:
+            self._pending_save = True
+            return True
+
+        if self._db_user_id is not None:
+            return self._save_to_postgresql()
+
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=2, ensure_ascii=False)
@@ -103,6 +128,30 @@ class ConfigManager:
         except IOError as e:
             print(f"Error saving config: {e}")
             return False
+
+    def begin_batch(self) -> None:
+        """Begin a grouped update section to avoid redundant disk writes."""
+        self._batch_depth += 1
+
+    def end_batch(self) -> bool:
+        """Finish a grouped update section and flush pending save once."""
+        if self._batch_depth == 0:
+            return True
+
+        self._batch_depth -= 1
+        if self._batch_depth == 0 and self._pending_save:
+            self._pending_save = False
+            return self.save_config()
+        return True
+
+    @contextmanager
+    def batch_update(self):
+        """Context manager to coalesce multiple save_config calls into one."""
+        self.begin_batch()
+        try:
+            yield self
+        finally:
+            self.end_batch()
     
     def _merge_config(self, saved_config: Dict[str, Any]) -> None:
         """Merge saved config with defaults"""
@@ -296,6 +345,150 @@ class ConfigManager:
         """Reset daily missions (called on new day)"""
         self.set('missions', 'completed_today', [])
         self.save_config()
+
+    # ── PostgreSQL multi-user support ──────────────────────────────────────
+
+    def load_as_user(self, user_id: int, username: str) -> None:
+        """
+        Switch this ConfigManager to PostgreSQL-backed storage for *user_id*.
+        After this call, load_config() and save_config() target the database.
+        """
+        self._db_user_id = user_id
+        self._db_username = username
+        self.config = copy.deepcopy(self.DEFAULT_CONFIG)
+        self.config['player']['username'] = username
+        self._load_from_postgresql()
+
+    def logout(self) -> None:
+        """Clear the active user session and fall back to JSON/offline mode."""
+        self._db_user_id = None
+        self._db_username = None
+        self.config = copy.deepcopy(self.DEFAULT_CONFIG)
+        self.load_config()
+
+    def get_logged_username(self) -> Optional[str]:
+        """Return the username of the currently logged-in user, or None."""
+        return self._db_username
+
+    def is_logged_in(self) -> bool:
+        """Return True when a user session is active (PostgreSQL mode)."""
+        return self._db_user_id is not None
+
+    def _load_from_postgresql(self) -> None:
+        """Populate config from the user's row in user_profiles."""
+        import logging as _log_mod
+        _log = _log_mod.getLogger(__name__)
+        try:
+            from RuleTragaperrasJuego.auth.database import get_session
+            from RuleTragaperrasJuego.auth.models import UserProfile
+
+            with get_session() as session:
+                profile = (
+                    session.query(UserProfile)
+                    .filter_by(user_id=self._db_user_id)
+                    .first()
+                )
+                if profile is None:
+                    _log.warning(
+                        "No profile found for user_id=%s; using defaults.",
+                        self._db_user_id,
+                    )
+                    return
+
+                # ── Balances / player ───────────────────────────────────
+                self.config['player']['current_balance'] = profile.current_balance
+                self.config['player']['practice_balance'] = profile.practice_balance
+                self.config['player']['last_login'] = profile.last_login_date
+
+                # ── Statistics ──────────────────────────────────────────
+                for stat in (
+                    'total_hands_played', 'total_wins', 'total_losses',
+                    'biggest_win', 'total_wagered', 'total_won',
+                    'poker_hands', 'blackjack_hands', 'roulette_spins', 'slots_spins',
+                ):
+                    self.config['statistics'][stat] = getattr(profile, stat, 0)
+
+                # ── Achievements ────────────────────────────────────────
+                self.config['achievements']['unlocked'] = (
+                    profile.achievements_unlocked or []
+                )
+                self.config['achievements']['progress'] = (
+                    profile.achievements_progress or {}
+                )
+
+                # ── Missions ────────────────────────────────────────────
+                self.config['missions']['daily_missions'] = (
+                    profile.daily_missions or []
+                )
+                self.config['missions']['last_mission_date'] = profile.last_mission_date
+                self.config['missions']['completed_today'] = (
+                    profile.completed_today or []
+                )
+
+                # ── Display / interface / gameplay settings ──────────────
+                settings = profile.settings or {}
+                for section in ('display', 'interface', 'gameplay'):
+                    if section in settings:
+                        self.config[section].update(settings[section])
+
+        except Exception as exc:
+            import logging as _log_mod
+            _log_mod.getLogger(__name__).error(
+                "Failed to load config from PostgreSQL: %s", exc
+            )
+
+    def _save_to_postgresql(self) -> bool:
+        """Persist config to the user's row in user_profiles."""
+        import logging as _log_mod
+        _log = _log_mod.getLogger(__name__)
+        try:
+            from RuleTragaperrasJuego.auth.database import get_session
+            from RuleTragaperrasJuego.auth.models import UserProfile
+
+            with get_session() as session:
+                profile = (
+                    session.query(UserProfile)
+                    .filter_by(user_id=self._db_user_id)
+                    .first()
+                )
+                if profile is None:
+                    profile = UserProfile(user_id=self._db_user_id)
+                    session.add(profile)
+
+                # ── Balances / player ───────────────────────────────────
+                profile.current_balance = self.config['player']['current_balance']
+                profile.practice_balance = self.config['player']['practice_balance']
+                profile.last_login_date = self.config['player']['last_login']
+
+                # ── Statistics ──────────────────────────────────────────
+                for stat in (
+                    'total_hands_played', 'total_wins', 'total_losses',
+                    'biggest_win', 'total_wagered', 'total_won',
+                    'poker_hands', 'blackjack_hands', 'roulette_spins', 'slots_spins',
+                ):
+                    setattr(profile, stat, self.config['statistics'].get(stat, 0))
+
+                # ── Achievements ────────────────────────────────────────
+                profile.achievements_unlocked = self.config['achievements']['unlocked']
+                profile.achievements_progress = self.config['achievements']['progress']
+
+                # ── Missions ────────────────────────────────────────────
+                profile.daily_missions = self.config['missions']['daily_missions']
+                profile.last_mission_date = self.config['missions']['last_mission_date']
+                profile.completed_today = self.config['missions']['completed_today']
+
+                # ── Display / interface / gameplay settings ──────────────
+                profile.settings = {
+                    'display': dict(self.config['display']),
+                    'interface': dict(self.config['interface']),
+                    'gameplay': dict(self.config['gameplay']),
+                }
+
+            return True
+
+        except Exception as exc:
+            _log.error("Failed to save config to PostgreSQL: %s", exc)
+            return False
 
 
 # Global config instance

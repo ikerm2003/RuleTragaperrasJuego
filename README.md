@@ -6,6 +6,49 @@ Una colección completa de juegos de casino implementada en Python con PyQt6, qu
 
 RuleTragaperrasJuego es un proyecto de casino virtual que presenta múltiples juegos de cartas y casino. Actualmente ofrece un módulo completo de Poker Texas Hold'em y una tragaperras 3x3 de última generación, ambos con interfaces PyQt6 profesionales y listas para jugar.
 
+## 🔄 Estado de Continuidad (2026-03-13)
+
+- Se ha definido una ruta formal de migración desde PyQt6 a Arcade en `roadmap_nuevomotor.md`, manteniendo la lógica desacoplada y planificando convivencia temporal entre ambos runtimes.
+- El orden recomendado de migración es: runtime Arcade común, contratos vista-lógica, Tragaperras, Ruleta, Blackjack, Poker y retirada final de PyQt6.
+- Fase B iniciada por roadmap: audio de gameplay ya integrado como primer bloque de pulido premium.
+- `sound_manager.py` actualizado a reproducción funcional con categorías (`SFX`/`MUSIC`), volumen maestro y volumen/mute por categoría.
+- SFX conectados en Blackjack, Poker, Ruleta y Tragaperras para acciones y resolución de ronda.
+- Audio contextual básico conectado en `main.py` (tema de menú, transición a tema por juego y restauración al volver).
+- Mapeo musical por contexto reforzado en `sound_manager.py` con `MusicContext`, fallback ordenado de pistas y anti-reinicio de la pista ya activa.
+- Overrides por configuración para pistas contextuales disponibles vía `interface.music_track_<contexto>` (valor simple o CSV).
+- Sonidos de progresión conectados en `game_events.py` para logros y misiones completadas.
+- `config_dialog.py` incluye controles de audio por categorías (maestro, SFX y música con mute).
+- Tests de audio añadidos en `Test/test_sound_manager.py` y validación de regresión en verde (92 tests en suite focalizada).
+- Métricas de rendimiento de `main.py` extraídas a `performance_debug.py` para reducir complejidad de UI principal.
+- Instrumentación y vista de `Rendimiento UI` ahora se activan solo en debug (`interface.debug_mode` o `CASINO_DEBUG_PERF=1`).
+- Exportación de snapshots de rendimiento en `main` ahora es asíncrona en background para no bloquear el flujo normal.
+- Fase A del `roadmap.md` completada (reglas avanzadas, contratos de eventos/estadísticas, checklist UX y refuerzo de cobertura core).
+- Contrato unificado de fin de ronda implementado en `game_events.py` e integrado en Blackjack, Poker, Ruleta y Tragaperras.
+- Corrección de consistencia de estadísticas por juego en logros: ruleta y tragaperras actualizan `roulette_spins` y `slots_spins`.
+- Checklist UX transversal definido y aplicado en `ux_checklist_fase_a.md`.
+- Nueva cobertura core añadida en `Test/test_game_events.py` para normalización de eventos, flujo win/loss y mapeo de estadísticas.
+- Rendimiento UI del menú principal reforzado con alertas visuales por severidad (`OK`, `ALTO`, `CRITICO`, `REGRESION`) en estado y delta de métricas.
+- Exportación histórica de snapshots a `performance_baseline_history.csv` desde `Juego > Rendimiento UI`.
+- Filtros interactivos por fuente/métrica y rango temporal ISO (`Desde/Hasta`) ya disponibles en `Juego > Rendimiento UI`.
+- La exportación CSV ahora respeta filtros activos para análisis incremental por ventana temporal.
+- Presets rápidos de rango temporal ya disponibles en `Juego > Rendimiento UI`: `Todo`, `Ultima hora`, `Ultimas 24h`, `Ultimos 7 dias`.
+- Nueva vista agregada de tendencia por métrica en `Juego > Rendimiento UI` para el periodo filtrado (avg agregado, delta, min/max y brechas de umbral).
+- Nueva comparativa agregada por fuente en `Juego > Rendimiento UI` para el periodo filtrado (avg agregado, delta, métricas incluidas y brechas de umbral).
+- Ordenación interactiva ya disponible en `Juego > Rendimiento UI` para tablas agregadas y detalle por snapshot.
+- Instrumentación de `main.py` ya disponible para tiempos de arranque del menú principal y transiciones de apertura/retorno entre ventanas, exportadas al baseline al cerrar la app.
+- Instrumentación fina por fase añadida en `main.py` para cada juego: `import`, `open` y transición de entrada (`ui.main.import_*_ms`, `ui.main.open_*_ms`, `ui.main.transition_to_*_ms`).
+- Instrumentación fina de retorno al menú añadida con `ui.main.restore_transition_*_ms` para separar coste de transición respecto al restore total.
+- Instrumentación de bootstrap añadida en `main.py` para import de auth/login, inicialización DB, carga de config por usuario y creación de `MainUI` (`ui.main.bootstrap.*`).
+- Las métricas de bootstrap se integran en el baseline de fuente `main` para análisis unificado en `performance_baseline.json`.
+- Nueva vista dedicada de desglose por fases en `Juego > Rendimiento UI` para métricas de `main` (`bootstrap`, `import`, `open`, `transition`) en el periodo filtrado.
+- Alertado agregado por fase ya disponible con severidad visual (`OK`, `ALTO`, `CRITICO`, `REGRESION`) combinando brechas de umbral y delta del periodo.
+- `roadmap_optimizaciones.md` ya usa checklist real de ejecución con estado consolidado: 19 tareas completadas y 23 pendientes sobre 42.
+- Corregido crash de arranque en Poker causado por `resizeEvent` durante la construcción temprana de la ventana.
+- Baseline consolidado sigue en `performance_baseline.json` y ahora puede incluir fuente `main` además de Blackjack y Tragaperras.
+- Validación de regresión ejecutada en esta sesión: `Test.test_main.TestMainUIPerformanceHelpers` en verde (15 tests).
+- Nota de entorno: `python -m unittest Test.test_main -v` mantiene un fallo GUI preexistente local (`QWidget: Must construct a QApplication before a QWidget`).
+- Siguiente foco recomendado: completar assets reales en `sounds/music` y cerrar pipeline de mezcla/ganancias por contexto para finalizar el bloque de audio de Fase B.
+
 ### 🎮 Módulos Principales
 
 - **🃏 Poker** (Completo): Implementación completa de Texas Hold'em
@@ -306,102 +349,141 @@ logging.basicConfig(level=logging.DEBUG)
 # El juego mostrará información detallada del estado
 ```
 
-## 🔮 Roadmap y Futuras Mejoras
+## 🔮 Roadmap Maestro (2026-2027)
 
-### 📋 Estado Actual
-- [x] **Poker**: Completo con todas las características
-  - Texas Hold'em con soporte 2-9 jugadores
-  - Sistema de IA para bots con estrategias básicas
-  - Interfaz profesional con animaciones y efectos
-  - 30 tests unitarios con 100% de cobertura
-- [x] **Tragaperras**: Módulo operativo con UI animada y estadísticas
-  - Sistema completo de slot machine con 5 rodillos
-  - Cálculo dinámico de RTP (Return to Player)
-  - Animaciones de giro y resaltado de líneas ganadoras
-  - Sistema de recuperación de pérdidas y estadísticas
-  - Tests completos de lógica y UI
-- [x] **Sistema de Configuración**: Completo
-  - Soporte multi-idioma (Español/Inglés)
-  - Configuración de pantalla, animaciones y gameplay
-  - Persistencia en archivo JSON
-- [x] **MainUI**: Menú principal funcional
-  - Lanzador integrado de juegos
-  - Acceso a configuración desde menú
-- [x] **Blackjack**: Implementación completa
-  - Lógica completa del juego con dealer AI
-  - Clases BlackjackCard y BlackjackDeck heredando de cardCommon
-  - Manejo completo de apuestas y balance
-  - Acciones: Hit, Stand, Double Down
-  - Cálculo correcto de valores con manejo de Ases
-  - Detección de Blackjack con pago 3:2
-  - UI profesional con visualización de cartas y estado del juego
-  - Integración completa con MainUI
-- [x] **Ruleta**: Implementación completa
-  - Ruleta europea con 37 números (0-36)
-  - Todos los tipos de apuestas estándar:
-    * Pleno (35:1), Caballo (17:1), Transversal (11:1)
-    * Cuadro (8:1), Línea (5:1)
-    * Docenas y Columnas (2:1)
-    * Rojo/Negro, Par/Impar, Alto/Bajo (1:1)
-  - Animación de ruleta giratoria
-  - Mesa de apuestas profesional
-  - Historial de números y estadísticas
-  - Sistema de balance y gestión de fichas
-  - Integración completa con MainUI
+### 🌍 Visión: “El mejor juego de casino del mundo”
 
-### 🚀 Características Planeadas
+Construir la mejor experiencia de casino de escritorio por **calidad de juego, sensación visual, profundidad de sistemas y fiabilidad técnica**.
 
-- [ ] **Multiplayer online**: Soporte para juego en red
-- [ ] **Misiones diarias**: Sistema de misiones y recompensas
-- [ ] **Auto-refill**: Recarga automática diaria de dinero
-- [ ] **Atajos de teclado**: Controles de teclado completos
-- [ ] **Estadísticas avanzadas**: Tracking de manos y estadísticas
-- [ ] **Modo torneo**: Soporte para torneos multi-mesa
-- [ ] **Temas personalizables**: Múltiples temas visuales
-- [ ] **Efectos de sonido**: Sistema de audio completo
-- [ ] **Sistema de achievements**: Logros y trofeos desbloqueables
-- [ ] **Modo práctica**: Juego sin dinero para aprendizaje
-- [ ] **Más animaciones**: Card flips, chip movements, efectos avanzados
+Esto significa:
 
-### 🎯 Mejoras Técnicas Planeadas
-- [ ] **IA avanzada**: Bots con múltiples personalidades y estrategias adaptativas
-- [ ] **Hand history**: Sistema de historial y replay de manos
-- [ ] **Variantes de poker**: Omaha, Seven-Card Stud, etc.
-- [ ] **Optimizaciones**: Mejoras de rendimiento y uso de memoria
-- [ ] **Más idiomas**: Soporte adicional más allá de Español/Inglés
-- [ ] **Sistema de logs**: Logging mejorado para debugging y análisis
-- [ ] **Testing automatizado**: CI/CD con tests automáticos
-- [ ] **Persistencia de datos**: Sistema de guardado de progreso y perfil de usuario
-- [ ] **Análisis de patrones**: Sistema de análisis de comportamiento de jugadores
-- [ ] **Splits en Blackjack**: Implementar división de pares
-- [ ] **Seguro en Blackjack**: Implementar apuesta de seguro contra Blackjack del dealer
+- Reglas impecables y auditables en todos los juegos
+- UX premium (fluidez, feedback visual/sonoro y claridad)
+- Progresión motivadora (misiones, logros, eventos)
+- Escalabilidad real para multijugador, torneos y contenido nuevo
+- Estabilidad de nivel producto (tests, métricas, rendimiento, cero regresiones críticas)
 
-### 📝 Guía de Implementación Óptima
+### 📌 Estado real actual (base sólida)
 
-Para implementar las características planeadas de manera eficiente:
+- ✅ Poker, Blackjack, Ruleta y Tragaperras funcionales con UI PyQt6
+- ✅ MainUI integrado con navegación y atajos
+- ✅ Sistema de configuración, idiomas y persistencia JSON
+- ✅ Misiones, logros, estadísticas y recarga diaria implementados
+- ✅ Temas visuales disponibles
+- ⚠️ Audio aún en modo base/placeholder (sin biblioteca de assets final)
+- ⚠️ Multijugador con servidor WebSocket disponible, pendiente de integración completa en gameplay
 
-#### 🏗️ Arquitectura y Diseño
-- **Modularidad**: Mantener separación estricta entre lógica, UI y gestión de estado
-- **Reutilización**: Aprovechar componentes existentes (ej: sistema de configuración)
-- **Escalabilidad**: Diseñar para soportar extensiones futuras sin refactoring mayor
-- **Testing First**: Escribir tests antes de implementar nuevas características
+### 🎯 North Star y KPIs de producto
 
-#### ⚡ Optimización y Rendimiento
-- **Lazy Loading**: Cargar módulos y recursos solo cuando se necesiten
-- **Caching**: Cachear resultados de cálculos costosos (ej: evaluación de manos)
-- **Async Operations**: Usar operaciones asíncronas para UI responsiva
-- **Memory Management**: Liberar recursos no utilizados, especialmente en cambios de juego
+- **Retención diaria (D1)**: objetivo ≥ 45%
+- **Retención semanal (D7)**: objetivo ≥ 20%
+- **Duración media de sesión**: objetivo 18-30 minutos
+- **Crash-free sessions**: objetivo ≥ 99.5%
+- **Regresiones críticas en release**: objetivo 0
+- **Cobertura de tests en lógica core**: objetivo ≥ 90%
 
-#### 🎯 Priorización Sugerida
-1. **Alta prioridad**: Completar Blackjack y Ruleta (completar juegos base)
-2. **Media prioridad**: Sistema de estadísticas, hand history, efectos de sonido
-3. **Baja prioridad**: Multiplayer online, torneos, variantes de poker avanzadas
+### 🗺️ Fases del roadmap
 
-#### 🔧 Mejores Prácticas
-- **Documentación**: Mantener README.md y docstrings actualizados
-- **Commits atómicos**: Un feature/fix por commit con mensajes descriptivos
-- **Code review**: Revisar cambios antes de merge
-- **Backwards compatibility**: Mantener compatibilidad con código existente
+#### Fase 1 — Excelencia del Core (Q2 2026)
+
+Objetivo: convertir la base actual en un producto ultra estable y pulido.
+
+- [ ] Cerrar brechas de reglas avanzadas (Blackjack: split, seguro; validaciones edge adicionales)
+- [ ] Unificar métricas y telemetría local de todos los juegos
+- [ ] Completar sistema de audio real (SFX + música + controles finos)
+- [ ] Mejorar feedback UX (microanimaciones, estados de botones, mensajes contextuales)
+- [ ] Harden de estabilidad (manejo de errores, recuperación, guardado robusto)
+- [ ] Ampliar tests en módulos con menor cobertura
+
+#### Fase 2 — Profundidad de Producto (Q3 2026)
+
+Objetivo: aumentar engagement y sensación de progresión diaria.
+
+- [ ] Temporadas de misiones (rotación semanal + objetivos especiales)
+- [ ] Revisión del sistema de logros (raridad, cadenas, hitos por juego)
+- [ ] Sistema de economía balanceada (recompensas, sinks, anti-exploit)
+- [ ] Historial de partidas/manos con pantalla de resumen
+- [ ] Mejoras de accesibilidad (tamaño UI, contraste, opciones de animación)
+
+#### Fase 3 — Competitivo y Social (Q4 2026)
+
+Objetivo: pasar de experiencia individual a ecosistema social.
+
+- [ ] Integración completa del multijugador en al menos 1 modo principal
+- [ ] Salas privadas/públicas con reconexión fiable
+- [ ] Chat y presencia de jugadores robustos
+- [ ] Modo torneo inicial (eliminación simple + tabla de posiciones)
+- [ ] Anti-cheat básico y validación server-authoritative para acciones críticas
+
+#### Fase 4 — Escala y Contenido Premium (Q1-Q2 2027)
+
+Objetivo: consolidar estatus “world-class”.
+
+- [ ] Variantes avanzadas de Poker (Omaha como primera expansión)
+- [ ] Eventos globales de tiempo limitado
+- [ ] Sistema de perfiles y progresión de largo plazo
+- [ ] Replay/hand history avanzado con filtros
+- [ ] Internacionalización ampliada (mínimo 4 idiomas activos)
+- [ ] Pipeline de releases con quality gates automáticos
+
+### 🧱 Pilar técnico transversal (aplica a todas las fases)
+
+- [ ] Arquitectura: mantener separación lógica/UI/estado y contratos claros
+- [ ] Rendimiento: profiling periódico de UI y lógica
+- [ ] Calidad: CI con tests, lint, checks de regresión
+- [ ] Observabilidad: logging estructurado y trazas de errores accionables
+- [ ] Compatibilidad: preservar APIs y migraciones sin romper datos de usuario
+
+### ⚠️ Riesgos clave y mitigación
+
+- **Complejidad multijugador** → priorizar diseño server-authoritative y pruebas de carga tempranas
+- **Regresiones al añadir features** → quality gates obligatorios por release
+- **Deuda UX entre juegos** → design system unificado y checklist de consistencia
+- **Desbalance económico** → telemetría y reajuste iterativo por temporada
+
+### ✅ Definición de “release excelente”
+
+Una versión se considera excelente cuando cumple todo lo siguiente:
+
+- 0 bugs críticos abiertos
+- crash-free sessions ≥ 99.5%
+- sin pérdida de progreso/configuración del usuario
+- rendimiento fluido en hardware objetivo
+- cobertura de tests del core mantenida o mejorada
+
+### 🚀 Prioridad inmediata recomendada (próximos sprints)
+
+1. Audio real + pulido UX transversal
+2. Cierre de reglas avanzadas (Blackjack split/seguro) y edge cases
+3. Integración progresiva del multijugador en un modo acotado
+4. CI de calidad con tests automáticos y checklist de release
+
+### 🔁 Continuidad entre sesiones (obligatorio)
+
+- La fuente de verdad del plan es `roadmap.md`.
+- Al cerrar cada sesión de implementación se actualizan: `roadmap.md`, `.github/copilot-instructions.md` y este `README.md`.
+- Estado actual de Fase A:
+  - ✅ Seguro (`insurance`) implementado en Blackjack (lógica + UI + tests).
+  - ✅ Split implementado en Blackjack (lógica + UI + tests).
+  - ✅ Corregida resolución duplicada de mano en Blackjack.
+  - ✅ Refactor en `main.py` para unificar lanzadores de juegos y evitar lógica repetida.
+  - ✅ `multiplayer_server.py` raíz convertido en wrapper para evitar código duplicado con `Server/multiplayer_server.py`.
+  - ✅ Optimización P0 de persistencia: `ConfigManager.batch_update()` para consolidar `save_config()` repetidos.
+  - ✅ Integración de batch en logros y misiones para reducir I/O por evento (`achievements.py`, `missions.py`).
+  - ✅ Caché de pixmaps de cartas implementada en Poker y Blackjack para reducir coste de render.
+  - ✅ Actualizaciones diferenciales de UI implementadas en Poker y Blackjack para evitar refrescos redundantes (`setPixmap`/`setText`/`setStyleSheet`).
+  - ✅ Refresco de cartas en Blackjack optimizado para actualizar solo slots modificados (sin limpieza completa en cada `update_display`).
+  - ✅ Patrón de actualización diferencial extendido a Tragaperras (`Tragaperras/tragaperras_ui.py`) en símbolos, resaltados y labels informativos.
+  - ✅ Instrumentación baseline en UI para latencias de acciones críticas en Blackjack y Tragaperras.
+  - ✅ Exportación consolidada de baseline a `performance_baseline.json` con resumen por métrica (`avg/min/max/p95`) y chequeo contra umbrales.
+  - ✅ Visualización de snapshots baseline desde MainUI (`Juego` > `Rendimiento UI`).
+  - ✅ Comparativa automática `Δ avg` entre snapshots consecutivos en la vista `Rendimiento UI`.
+  - ✅ Workflow CI inicial en `.github/workflows/tests.yml` para tests críticos de regresión.
+  - ✅ Validación parcial de regresión: `Test/test_main.py` + `Test/test_blackjack_logic.py` en verde.
+  - ✅ Validación rápida de regresión: `Test/test_main.py` en verde.
+  - ✅ Validación de regresión tras UI diferencial: `Test/test_blackjack_logic.py` + `Test/test_main.py` en verde (31 tests).
+  - ✅ Validación de regresión en Tragaperras: `Test/test_tragaperras_table.py` + `Test/test_tragaperras.py` + `Test/test_main.py` en verde (5 tests en esta ejecución).
+  - ⏳ Siguiente foco recomendado: alertas visuales reforzadas y exportación CSV de métricas históricas.
 
 ## 👨‍💻 Desarrollo y Contribución
 

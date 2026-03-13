@@ -300,90 +300,98 @@ class AchievementManager:
     def update_game_stat(self, game_type: str, increment: int = 1) -> List[Achievement]:
         """Update game-specific statistics and check achievements"""
         unlocked = []
-        
-        # Update total hands
-        self.config.update_statistic('total_hands_played', increment)
-        total_hands = self.config.get_statistic('total_hands_played')
-        
-        # Check general achievements
-        if self.check_and_unlock('first_game', total_hands):
-            unlocked.append(self.achievements['first_game'])
-        if self.check_and_unlock('played_100', total_hands):
-            unlocked.append(self.achievements['played_100'])
-        if self.check_and_unlock('played_1000', total_hands):
-            unlocked.append(self.achievements['played_1000'])
-        
-        # Update game-specific stats
-        stat_name = f'{game_type}_hands'
-        self.config.update_statistic(stat_name, increment)
-        game_hands = self.config.get_statistic(stat_name)
-        
-        # Check game-specific achievements
-        if game_type == 'poker':
-            if self.check_and_unlock('poker_10', game_hands):
-                unlocked.append(self.achievements['poker_10'])
-            if self.check_and_unlock('poker_100', game_hands):
-                unlocked.append(self.achievements['poker_100'])
-        elif game_type == 'blackjack':
-            if self.check_and_unlock('blackjack_10', game_hands):
-                unlocked.append(self.achievements['blackjack_10'])
-            if self.check_and_unlock('blackjack_100', game_hands):
-                unlocked.append(self.achievements['blackjack_100'])
-        elif game_type == 'roulette':
-            if self.check_and_unlock('roulette_10', game_hands):
-                unlocked.append(self.achievements['roulette_10'])
-            if self.check_and_unlock('roulette_100', game_hands):
-                unlocked.append(self.achievements['roulette_100'])
-        elif game_type == 'slots':
-            if self.check_and_unlock('slots_10', game_hands):
-                unlocked.append(self.achievements['slots_10'])
-            if self.check_and_unlock('slots_100', game_hands):
-                unlocked.append(self.achievements['slots_100'])
-        
-        # Check "all games" achievement
-        if (self.config.get_statistic('poker_hands') >= 10 and
-            self.config.get_statistic('blackjack_hands') >= 10 and
-            self.config.get_statistic('roulette_spins') >= 10 and
-            self.config.get_statistic('slots_spins') >= 10):
-            if self.check_and_unlock('all_games', 1):
-                unlocked.append(self.achievements['all_games'])
+        stat_key_by_game = {
+            'poker': 'poker_hands',
+            'blackjack': 'blackjack_hands',
+            'roulette': 'roulette_spins',
+            'slots': 'slots_spins',
+        }
+
+        with self.config.batch_update():
+            # Update total hands
+            self.config.update_statistic('total_hands_played', increment)
+            total_hands = self.config.get_statistic('total_hands_played')
+
+            # Check general achievements
+            if self.check_and_unlock('first_game', total_hands):
+                unlocked.append(self.achievements['first_game'])
+            if self.check_and_unlock('played_100', total_hands):
+                unlocked.append(self.achievements['played_100'])
+            if self.check_and_unlock('played_1000', total_hands):
+                unlocked.append(self.achievements['played_1000'])
+
+            # Update game-specific stats
+            stat_name = stat_key_by_game.get(game_type, f'{game_type}_hands')
+            self.config.update_statistic(stat_name, increment)
+            game_hands = self.config.get_statistic(stat_name)
+
+            # Check game-specific achievements
+            if game_type == 'poker':
+                if self.check_and_unlock('poker_10', game_hands):
+                    unlocked.append(self.achievements['poker_10'])
+                if self.check_and_unlock('poker_100', game_hands):
+                    unlocked.append(self.achievements['poker_100'])
+            elif game_type == 'blackjack':
+                if self.check_and_unlock('blackjack_10', game_hands):
+                    unlocked.append(self.achievements['blackjack_10'])
+                if self.check_and_unlock('blackjack_100', game_hands):
+                    unlocked.append(self.achievements['blackjack_100'])
+            elif game_type == 'roulette':
+                if self.check_and_unlock('roulette_10', game_hands):
+                    unlocked.append(self.achievements['roulette_10'])
+                if self.check_and_unlock('roulette_100', game_hands):
+                    unlocked.append(self.achievements['roulette_100'])
+            elif game_type == 'slots':
+                if self.check_and_unlock('slots_10', game_hands):
+                    unlocked.append(self.achievements['slots_10'])
+                if self.check_and_unlock('slots_100', game_hands):
+                    unlocked.append(self.achievements['slots_100'])
+
+            # Check "all games" achievement
+            if (self.config.get_statistic('poker_hands') >= 10 and
+                self.config.get_statistic('blackjack_hands') >= 10 and
+                self.config.get_statistic('roulette_spins') >= 10 and
+                self.config.get_statistic('slots_spins') >= 10):
+                if self.check_and_unlock('all_games', 1):
+                    unlocked.append(self.achievements['all_games'])
         
         return unlocked
     
     def update_win(self, amount: int) -> List[Achievement]:
         """Update win statistics and check achievements"""
         unlocked = []
-        
-        # Update wins
-        self.config.update_statistic('total_wins', 1)
-        total_wins = self.config.get_statistic('total_wins')
-        
-        # Update amount won
-        self.config.update_statistic('total_won', amount)
-        
-        # Check win achievements
-        if self.check_and_unlock('first_win', total_wins):
-            unlocked.append(self.achievements['first_win'])
-        if self.check_and_unlock('win_10', total_wins):
-            unlocked.append(self.achievements['win_10'])
-        if self.check_and_unlock('win_100', total_wins):
-            unlocked.append(self.achievements['win_100'])
-        
-        # Check big win achievements
-        if self.check_and_unlock('big_win_1000', amount):
-            unlocked.append(self.achievements['big_win_1000'])
-        if self.check_and_unlock('big_win_5000', amount):
-            unlocked.append(self.achievements['big_win_5000'])
-        
-        # Update biggest win
-        current_biggest = self.config.get_statistic('biggest_win')
-        if amount > current_biggest:
-            self.config.update_statistic('biggest_win', amount, increment=False)
-        
-        # Check millionaire achievement
-        current_balance = self.config.get_effective_balance()
-        if self.check_and_unlock('millionaire', current_balance):
-            unlocked.append(self.achievements['millionaire'])
+
+        with self.config.batch_update():
+            # Update wins
+            self.config.update_statistic('total_wins', 1)
+            total_wins = self.config.get_statistic('total_wins')
+
+            # Update amount won
+            self.config.update_statistic('total_won', amount)
+
+            # Check win achievements
+            if self.check_and_unlock('first_win', total_wins):
+                unlocked.append(self.achievements['first_win'])
+            if self.check_and_unlock('win_10', total_wins):
+                unlocked.append(self.achievements['win_10'])
+            if self.check_and_unlock('win_100', total_wins):
+                unlocked.append(self.achievements['win_100'])
+
+            # Check big win achievements
+            if self.check_and_unlock('big_win_1000', amount):
+                unlocked.append(self.achievements['big_win_1000'])
+            if self.check_and_unlock('big_win_5000', amount):
+                unlocked.append(self.achievements['big_win_5000'])
+
+            # Update biggest win
+            current_biggest = self.config.get_statistic('biggest_win')
+            if amount > current_biggest:
+                self.config.update_statistic('biggest_win', amount, increment=False)
+
+            # Check millionaire achievement
+            current_balance = self.config.get_effective_balance()
+            if self.check_and_unlock('millionaire', current_balance):
+                unlocked.append(self.achievements['millionaire'])
         
         return unlocked
     

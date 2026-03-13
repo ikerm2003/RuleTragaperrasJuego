@@ -31,10 +31,21 @@ from PyQt6.QtWidgets import (
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).resolve().parent.parent
-if str(parent_dir) not in sys.path:
-    sys.path.insert(0, str(parent_dir))
+package_parent_dir = parent_dir.parent
+for path_entry in (package_parent_dir, parent_dir):
+    str_path = str(path_entry)
+    if str_path not in sys.path:
+        sys.path.insert(0, str_path)
 
-from Ruleta.ruleta_logic import BLACK_NUMBERS, RED_NUMBERS, BetType, RouletteGame
+from RuleTragaperrasJuego.Ruleta.ruleta_logic import (
+    BLACK_NUMBERS,
+    RED_NUMBERS,
+    BetType,
+    RouletteGame,
+)
+from RuleTragaperrasJuego.config import config_manager
+from RuleTragaperrasJuego.game_events import GameRoundEvent, get_game_event_service
+from RuleTragaperrasJuego.sound_manager import get_sound_manager
 
 
 class RouletteWheel(QWidget):
@@ -303,7 +314,17 @@ class RouletteWindow(QMainWindow):
         self.game = RouletteGame(initial_balance=1000)
         self.parent_window = parent
         self.current_chip_value = 10
+        self._last_spin_total_bet = 0
+        self.sound_manager = get_sound_manager(config_manager)
         self.init_ui()
+
+    def _play_sound(self, method_name: str, *args, **kwargs) -> None:
+        manager = self.sound_manager
+        if manager is None:
+            return
+        callback = getattr(manager, method_name, None)
+        if callable(callback):
+            callback(*args, **kwargs)
 
     def init_ui(self):
         """Inicializa la interfaz"""
@@ -478,6 +499,7 @@ class RouletteWindow(QMainWindow):
         bet = self.game.create_straight_up_bet(number, self.current_chip_value)
         if bet and self.game.place_bet(bet):
             self.update_display()
+            self._play_sound("play_chip_place")
             self.result_label.setText(
                 f"Apuesta ${self.current_chip_value} al número {number}"
             )
@@ -489,6 +511,7 @@ class RouletteWindow(QMainWindow):
         bet = self.game.create_dozen_bet(dozen, self.current_chip_value)
         if bet and self.game.place_bet(bet):
             self.update_display()
+            self._play_sound("play_chip_place")
             ranges = {1: "1-12", 2: "13-24", 3: "25-36"}
             self.result_label.setText(
                 f"Apuesta ${self.current_chip_value} a docena {ranges[dozen]}"
@@ -522,6 +545,7 @@ class RouletteWindow(QMainWindow):
 
         if bet and self.game.place_bet(bet):
             self.update_display()
+            self._play_sound("play_chip_place")
             self.result_label.setText(f"Apuesta ${self.current_chip_value} a {desc}")
         else:
             QMessageBox.warning(self, "Error", "No puedes colocar esta apuesta.")
@@ -540,8 +564,10 @@ class RouletteWindow(QMainWindow):
 
         self.spin_button.setEnabled(False)
         self.result_label.setText("¡Girando la ruleta!")
+        self._play_sound("play_roulette_spin")
 
         # Girar la ruleta
+        self._last_spin_total_bet = self.game.get_total_bet()
         winning_number, total_winnings = self.game.spin()
 
         # Animar el giro
@@ -549,10 +575,13 @@ class RouletteWindow(QMainWindow):
 
         # Mostrar resultado después de la animación
         QTimer.singleShot(
-            3000, lambda: self.show_result(winning_number, total_winnings)
+            3000,
+            lambda: self.show_result(
+                winning_number, total_winnings, self._last_spin_total_bet
+            ),
         )
 
-    def show_result(self, winning_number: int, total_winnings: int):
+    def show_result(self, winning_number: int, total_winnings: int, total_bet: int):
         """Muestra el resultado del giro"""
         color = self.game.get_number_color(winning_number)
         color_text = {"red": "ROJO", "black": "NEGRO", "green": "VERDE"}[color]
@@ -569,6 +598,26 @@ class RouletteWindow(QMainWindow):
         self.result_label.setText(result_text)
         self.update_display()
         self.spin_button.setEnabled(True)
+
+        if total_winnings > total_bet:
+            self._play_sound("play_win")
+        elif total_winnings <= 0:
+            self._play_sound("play_lose")
+        else:
+            self._play_sound("play_notification")
+
+        net_win = int(total_winnings) - int(total_bet)
+        try:
+            get_game_event_service().record_round(
+                GameRoundEvent(
+                    game_type="roulette",
+                    rounds_played=1,
+                    wagered=max(0, int(total_bet)),
+                    net_win=net_win,
+                )
+            )
+        except Exception:
+            pass
 
     def update_display(self):
         """Actualiza la visualización de balance y apuestas"""

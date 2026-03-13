@@ -1,7 +1,10 @@
 import os
 import random
 import sys
+import time
+import json
 from enum import Enum
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -19,12 +22,19 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-import cardCommon
+import RuleTragaperrasJuego.cardCommon as cardCommon
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).resolve().parent.parent
-if str(parent_dir) not in sys.path:
-    sys.path.insert(0, str(parent_dir))
+package_parent_dir = parent_dir.parent
+for path_entry in (package_parent_dir, parent_dir):
+    str_path = str(path_entry)
+    if str_path not in sys.path:
+        sys.path.insert(0, str_path)
+
+from RuleTragaperrasJuego.game_events import GameRoundEvent, get_game_event_service
+from RuleTragaperrasJuego.config import config_manager
+from RuleTragaperrasJuego.sound_manager import get_sound_manager
 
 BaseCard = cardCommon.BaseCard
 BaseDeck = cardCommon.BaseDeck
@@ -109,6 +119,13 @@ class BlackjackGame:
 
         self.player_stood = False
         self.insurance_bet = 0
+        self.hand_resolved = False
+        self.last_result = ""
+        self.last_winnings = 0
+        self.split_mode = False
+        self.split_hands: List[List[BlackjackCard]] = []
+        self.split_bets: List[int] = []
+        self.current_hand_index = 0
 
     def calculate_hand_value(self, hand: List[BlackjackCard]) -> int:
         """Calcula el valor de una mano, ajustando Ases si es necesario"""
@@ -128,11 +145,22 @@ class BlackjackGame:
 
     def can_double(self) -> bool:
         """Verifica si el jugador puede doblar"""
-        return len(self.player_hand) == 2 and self.balance >= self.current_bet
+        active_bet = self.current_bet
+        if self.split_mode and self.split_bets:
+            active_bet = self.split_bets[self.current_hand_index]
+
+        return (
+            self.state == GameState.PLAYER_TURN
+            and len(self.player_hand) == 2
+            and self.balance >= active_bet
+        )
 
     def can_split(self) -> bool:
-        """Verifica si el jugador puede dividir (no implementado aún en UI)"""
+        """Verifica si el jugador puede dividir su mano inicial"""
         return (
+            self.state == GameState.PLAYER_TURN
+            and not self.split_mode
+            and
             len(self.player_hand) == 2
             and self.player_hand[0].value == self.player_hand[1].value
             and self.balance >= self.current_bet
@@ -141,10 +169,42 @@ class BlackjackGame:
     def can_take_insurance(self) -> bool:
         """Verifica si el jugador puede tomar seguro"""
         return (
+            self.state == GameState.PLAYER_TURN
+            and not self.split_mode
+            and
             len(self.dealer_hand) == 2
             and self.dealer_hand[0].is_ace()
+            and self.insurance_bet == 0
             and self.balance >= self.current_bet // 2
         )
+
+    def take_insurance(self) -> bool:
+        """El jugador toma seguro (mitad de la apuesta principal)."""
+        if not self.can_take_insurance():
+            return False
+
+        self.insurance_bet = self.current_bet // 2
+        self.balance -= self.insurance_bet
+        return True
+
+    def split_hand(self) -> bool:
+        """Divide la mano del jugador en dos manos independientes."""
+        if not self.can_split():
+            return False
+
+        first_card, second_card = self.player_hand
+
+        self.balance -= self.current_bet
+        self.split_mode = True
+        self.split_hands = [
+            [first_card, self.deck.deal(1)[0]],
+            [second_card, self.deck.deal(1)[0]],
+        ]
+        self.split_bets = [self.current_bet, self.current_bet]
+        self.current_hand_index = 0
+        self.player_hand = self.split_hands[self.current_hand_index]
+
+        return True
 
     def place_bet(self, amount: int) -> bool:
         """Coloca una apuesta"""
@@ -153,6 +213,13 @@ class BlackjackGame:
         self.current_bet = amount
         self.balance -= amount
         self.state = GameState.DEALING
+        self.hand_resolved = False
+        self.last_result = ""
+        self.last_winnings = 0
+        self.split_mode = False
+        self.split_hands = []
+        self.split_bets = []
+        self.current_hand_index = 0
         return True
 
     def start_new_hand(self):
@@ -165,6 +232,13 @@ class BlackjackGame:
         self.dealer_hand = []
         self.player_stood = False
         self.insurance_bet = 0
+        self.hand_resolved = False
+        self.last_result = ""
+        self.last_winnings = 0
+        self.split_mode = False
+        self.split_hands = []
+        self.split_bets = []
+        self.current_hand_index = 0
 
         # Repartir cartas iniciales
         self.player_hand.append(self.deck.deal(1)[0])
@@ -179,6 +253,21 @@ class BlackjackGame:
             self.state = GameState.DEALER_TURN
             self.resolve_hand()
 
+    def _advance_split_hand_or_resolve(self) -> None:
+        """Avanza a la siguiente mano dividida o resuelve ronda si no quedan."""
+        if not self.split_mode:
+            return
+
+        if self.current_hand_index < len(self.split_hands) - 1:
+            self.current_hand_index += 1
+            self.player_hand = self.split_hands[self.current_hand_index]
+            self.current_bet = self.split_bets[self.current_hand_index]
+            self.state = GameState.PLAYER_TURN
+            return
+
+        self.state = GameState.DEALER_TURN
+        self.dealer_play()
+
     def hit(self) -> bool:
         """El jugador pide una carta"""
         if self.state != GameState.PLAYER_TURN:
@@ -187,8 +276,11 @@ class BlackjackGame:
         self.player_hand.append(self.deck.deal(1)[0])
 
         if self.calculate_hand_value(self.player_hand) > 21:
-            self.state = GameState.GAME_OVER
-            self.resolve_hand()
+            if self.split_mode:
+                self._advance_split_hand_or_resolve()
+            else:
+                self.state = GameState.GAME_OVER
+                self.resolve_hand()
 
         return True
 
@@ -198,8 +290,11 @@ class BlackjackGame:
             return False
 
         self.player_stood = True
-        self.state = GameState.DEALER_TURN
-        self.dealer_play()
+        if self.split_mode:
+            self._advance_split_hand_or_resolve()
+        else:
+            self.state = GameState.DEALER_TURN
+            self.dealer_play()
         return True
 
     def double_down(self) -> bool:
@@ -207,17 +302,33 @@ class BlackjackGame:
         if not self.can_double():
             return False
 
-        self.balance -= self.current_bet
-        self.current_bet *= 2
+        active_bet = self.current_bet
+        if self.split_mode and self.split_bets:
+            active_bet = self.split_bets[self.current_hand_index]
+
+        self.balance -= active_bet
+
+        if self.split_mode and self.split_bets:
+            self.split_bets[self.current_hand_index] += active_bet
+            self.current_bet = self.split_bets[self.current_hand_index]
+        else:
+            self.current_bet *= 2
+
         self.player_hand.append(self.deck.deal(1)[0])
 
         if self.calculate_hand_value(self.player_hand) > 21:
-            self.state = GameState.GAME_OVER
-            self.resolve_hand()
+            if self.split_mode:
+                self._advance_split_hand_or_resolve()
+            else:
+                self.state = GameState.GAME_OVER
+                self.resolve_hand()
         else:
             self.player_stood = True
-            self.state = GameState.DEALER_TURN
-            self.dealer_play()
+            if self.split_mode:
+                self._advance_split_hand_or_resolve()
+            else:
+                self.state = GameState.DEALER_TURN
+                self.dealer_play()
 
         return True
 
@@ -230,10 +341,19 @@ class BlackjackGame:
             self.dealer_hand.append(self.deck.deal(1)[0])
 
         self.state = GameState.GAME_OVER
-        self.resolve_hand()
+        if self.split_mode:
+            self.resolve_split_hands()
+        else:
+            self.resolve_hand()
 
     def resolve_hand(self) -> Tuple[str, int]:
         """Resuelve la mano y determina el ganador"""
+        if self.split_mode:
+            return self.resolve_split_hands()
+
+        if self.hand_resolved:
+            return self.last_result, self.last_winnings
+
         player_value = self.calculate_hand_value(self.player_hand)
         dealer_value = self.calculate_hand_value(self.dealer_hand)
 
@@ -266,20 +386,175 @@ class BlackjackGame:
             result = f"Empate con {player_value}."
             winnings = self.current_bet
 
+        insurance_winnings = 0
+        if self.insurance_bet > 0 and dealer_blackjack:
+            insurance_winnings = self.insurance_bet * 3
+            result += " Seguro ganado."
+
+        winnings += insurance_winnings
+
         self.balance += winnings
         self.state = GameState.BETTING
 
+        self.last_result = result
+        self.last_winnings = winnings
+        self.hand_resolved = True
+
         return result, winnings
+
+    def resolve_split_hands(self) -> Tuple[str, int]:
+        """Resuelve las manos divididas contra la mano del dealer."""
+        if self.hand_resolved:
+            return self.last_result, self.last_winnings
+
+        dealer_value = self.calculate_hand_value(self.dealer_hand)
+        dealer_blackjack = self.is_blackjack(self.dealer_hand)
+
+        total_winnings = 0
+        hand_results = []
+
+        for index, hand in enumerate(self.split_hands):
+            bet = self.split_bets[index]
+            player_value = self.calculate_hand_value(hand)
+
+            if player_value > 21:
+                hand_result = f"Mano {index + 1}: te pasaste ({player_value})."
+                winnings = 0
+            elif dealer_value > 21:
+                hand_result = f"Mano {index + 1}: dealer se pasó, ganaste."
+                winnings = bet * 2
+            elif dealer_blackjack:
+                hand_result = f"Mano {index + 1}: dealer blackjack, perdiste."
+                winnings = 0
+            elif player_value > dealer_value:
+                hand_result = (
+                    f"Mano {index + 1}: ganaste con {player_value} vs {dealer_value}."
+                )
+                winnings = bet * 2
+            elif dealer_value > player_value:
+                hand_result = (
+                    f"Mano {index + 1}: dealer gana con {dealer_value} vs {player_value}."
+                )
+                winnings = 0
+            else:
+                hand_result = f"Mano {index + 1}: empate con {player_value}."
+                winnings = bet
+
+            total_winnings += winnings
+            hand_results.append(hand_result)
+
+        if self.insurance_bet > 0 and dealer_blackjack:
+            total_winnings += self.insurance_bet * 3
+            hand_results.append("Seguro ganado.")
+
+        self.balance += total_winnings
+        self.state = GameState.BETTING
+        self.player_hand = self.split_hands[0] if self.split_hands else self.player_hand
+
+        self.last_result = " ".join(hand_results)
+        self.last_winnings = total_winnings
+        self.hand_resolved = True
+
+        return self.last_result, self.last_winnings
 
 
 class BlackJackWindow(QMainWindow):
     """Ventana principal del juego de Blackjack"""
 
+    UI_LATENCY_THRESHOLDS_MS: dict[str, float] = {
+        "ui.blackjack.deal_ms": 40.0,
+        "ui.blackjack.hit_ms": 30.0,
+        "ui.blackjack.stand_ms": 35.0,
+        "ui.blackjack.double_ms": 40.0,
+        "ui.blackjack.split_ms": 45.0,
+    }
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.game = BlackjackGame(initial_balance=1000)
         self.parent_window = parent
+        self._card_pixmap_cache: dict[tuple[str, str, bool], QPixmap] = {}
+        self._ui_perf_metrics: dict[str, list[float]] = {}
+        self._round_event_reported = False
+        self.sound_manager = get_sound_manager(config_manager)
         self.init_ui()
+
+    def _play_sound(self, method_name: str, *args, **kwargs) -> None:
+        manager = self.sound_manager
+        if manager is None:
+            return
+        callback = getattr(manager, method_name, None)
+        if callable(callback):
+            callback(*args, **kwargs)
+
+    def _record_ui_action_latency(self, action_name: str, start_time: float) -> None:
+        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+        metric_name = f"ui.blackjack.{action_name}_ms"
+        if metric_name not in self._ui_perf_metrics:
+            self._ui_perf_metrics[metric_name] = []
+        self._ui_perf_metrics[metric_name].append(elapsed_ms)
+        if len(self._ui_perf_metrics[metric_name]) > 100:
+            self._ui_perf_metrics[metric_name] = self._ui_perf_metrics[metric_name][-100:]
+
+    def _build_metric_summary(self, metric_name: str, samples: list[float]) -> dict:
+        ordered = sorted(samples)
+        count = len(ordered)
+        p95_index = max(0, min(count - 1, int(count * 0.95) - 1))
+        avg_ms = sum(ordered) / count
+        threshold_ms = self.UI_LATENCY_THRESHOLDS_MS.get(metric_name)
+
+        return {
+            "count": count,
+            "avg_ms": round(avg_ms, 3),
+            "min_ms": round(ordered[0], 3),
+            "max_ms": round(ordered[-1], 3),
+            "p95_ms": round(ordered[p95_index], 3),
+            "threshold_ms": threshold_ms,
+            "within_threshold": (
+                None
+                if threshold_ms is None
+                else round(avg_ms, 3) <= threshold_ms
+            ),
+        }
+
+    def _export_ui_metrics_baseline(self) -> None:
+        if not self._ui_perf_metrics:
+            return
+
+        report_path = parent_dir / "performance_baseline.json"
+        summary = {
+            metric: self._build_metric_summary(metric, samples)
+            for metric, samples in self._ui_perf_metrics.items()
+            if samples
+        }
+
+        if not summary:
+            return
+
+        snapshot = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "source": "blackjack",
+            "metrics": summary,
+        }
+
+        data = {"snapshots": []}
+        if report_path.exists():
+            try:
+                with open(report_path, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict) and isinstance(loaded.get("snapshots"), list):
+                    data = loaded
+            except (OSError, json.JSONDecodeError):
+                data = {"snapshots": []}
+
+        data["snapshots"].append(snapshot)
+        data["snapshots"] = data["snapshots"][-200:]
+
+        try:
+            with open(report_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass
 
     def init_ui(self):
         self.setWindowTitle("Blackjack - Casino")
@@ -384,19 +659,27 @@ class BlackJackWindow(QMainWindow):
         self.hit_button = QPushButton("Pedir")
         self.stand_button = QPushButton("Plantarse")
         self.double_button = QPushButton("Doblar")
+        self.split_button = QPushButton("Split")
+        self.insurance_button = QPushButton("Seguro")
 
         self.hit_button.setFont(QFont("Arial", 12))
         self.stand_button.setFont(QFont("Arial", 12))
         self.double_button.setFont(QFont("Arial", 12))
+        self.split_button.setFont(QFont("Arial", 12))
+        self.insurance_button.setFont(QFont("Arial", 12))
 
         self.hit_button.clicked.connect(self.hit)
         self.stand_button.clicked.connect(self.stand)
         self.double_button.clicked.connect(self.double_down)
+        self.split_button.clicked.connect(self.split_hand)
+        self.insurance_button.clicked.connect(self.take_insurance)
 
         self.action_layout.addStretch()
         self.action_layout.addWidget(self.hit_button)
         self.action_layout.addWidget(self.stand_button)
         self.action_layout.addWidget(self.double_button)
+        self.action_layout.addWidget(self.split_button)
+        self.action_layout.addWidget(self.insurance_button)
         self.action_layout.addStretch()
         main_layout.addLayout(self.action_layout)
 
@@ -440,9 +723,78 @@ class BlackJackWindow(QMainWindow):
         self.hit_button.setEnabled(enabled)
         self.stand_button.setEnabled(enabled)
         self.double_button.setEnabled(enabled and self.game.can_double())
+        self.split_button.setEnabled(enabled and self.game.can_split())
+        self.insurance_button.setEnabled(enabled and self.game.can_take_insurance())
+
+    def update_turn_status(self):
+        """Actualiza texto de estado durante turno del jugador."""
+        if self.game.state != GameState.PLAYER_TURN:
+            return
+
+        if self.game.split_mode and self.game.split_hands:
+            hand_no = self.game.current_hand_index + 1
+            hand_total = len(self.game.split_hands)
+            active_bet = self.game.split_bets[self.game.current_hand_index]
+            self.status_label.setText(
+                f"Split activo. Jugando mano {hand_no}/{hand_total}. "
+                f"Apuesta mano: ${active_bet}."
+            )
+
+    def finalize_round_if_finished(self):
+        """Sincroniza la UI cuando la ronda ya se ha resuelto en la lógica."""
+        if self.game.state != GameState.BETTING:
+            return
+
+        self.status_label.setText(self.game.last_result)
+        self.set_action_buttons_enabled(False)
+        self.bet_spinbox.setEnabled(True)
+        self.deal_button.setEnabled(True)
+
+        if self._round_event_reported:
+            return
+
+        wagered = 0
+        if self.game.split_mode and self.game.split_bets:
+            wagered = sum(self.game.split_bets)
+        elif self.game.current_bet > 0:
+            wagered = self.game.current_bet
+        wagered += max(0, int(self.game.insurance_bet))
+
+        net_win = int(self.game.last_winnings) - int(wagered)
+        try:
+            get_game_event_service().record_round(
+                GameRoundEvent(
+                    game_type="blackjack",
+                    rounds_played=1,
+                    wagered=wagered,
+                    net_win=net_win,
+                )
+            )
+            self._round_event_reported = True
+        except Exception:
+            pass
+
+        try:
+            if net_win > 0:
+                self._play_sound("play_win", big_win=net_win >= max(500, wagered * 3))
+            elif net_win < 0:
+                self._play_sound("play_lose")
+            else:
+                self._play_sound("play_notification")
+        except Exception:
+            pass
 
     def load_card_image(self, card: BlackjackCard, hidden: bool = False):
         """Crea un pixmap con la representación visual de la carta"""
+        cache_key = (
+            "__hidden__" if hidden else str(card.value),
+            "__hidden__" if hidden else str(card.suit),
+            hidden,
+        )
+        cached = self._card_pixmap_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         pixmap = QPixmap(80, 120)
 
         if hidden:
@@ -454,6 +806,7 @@ class BlackJackWindow(QMainWindow):
             painter.drawRect(5, 5, 69, 109)
             painter.drawText(20, 65, "🂠")
             painter.end()
+            self._card_pixmap_cache[cache_key] = pixmap
             return pixmap
 
         # Carta boca arriba
@@ -498,52 +851,99 @@ class BlackJackWindow(QMainWindow):
         painter.drawRect(0, 0, 79, 119)
 
         painter.end()
+        self._card_pixmap_cache[cache_key] = pixmap
         return pixmap
 
     def update_display(self):
         """Actualiza la visualización de las cartas y valores"""
-        # Limpiar todas las cartas primero
-        for label in self.dealer_card_labels + self.player_card_labels:
-            label.clear()
-            label.hide()
-
         # Mostrar cartas del dealer
-        for i, card in enumerate(self.game.dealer_hand):
-            if i < len(self.dealer_card_labels):
+        for i, label in enumerate(self.dealer_card_labels):
+            if i < len(self.game.dealer_hand):
+                card = self.game.dealer_hand[i]
                 # Ocultar segunda carta del dealer si el jugador aún está jugando
                 hide_card = i == 1 and self.game.state == GameState.PLAYER_TURN
                 pixmap = self.load_card_image(card, hidden=hide_card)
-                self.dealer_card_labels[i].setPixmap(pixmap)
-                self.dealer_card_labels[i].setScaledContents(True)
-                self.dealer_card_labels[i].show()
+                card_key = (
+                    "dealer",
+                    i,
+                    "__hidden__" if hide_card else str(card.value),
+                    "__hidden__" if hide_card else str(card.suit),
+                    hide_card,
+                )
+                self._update_card_label(label, pixmap, card_key)
+            else:
+                self._hide_card_label(label)
 
         # Mostrar valor del dealer
         if self.game.state == GameState.PLAYER_TURN:
             # Solo mostrar valor de la primera carta
             if self.game.dealer_hand:
                 dealer_value = self.game.dealer_hand[0].get_numeric_value()
-                self.dealer_value_label.setText(f"Mostrando: {dealer_value}")
+                self._set_label_text_if_changed(
+                    self.dealer_value_label, f"Mostrando: {dealer_value}"
+                )
+            else:
+                self._set_label_text_if_changed(self.dealer_value_label, "")
         else:
             dealer_value = self.game.calculate_hand_value(self.game.dealer_hand)
-            self.dealer_value_label.setText(f"Total: {dealer_value}")
+            self._set_label_text_if_changed(self.dealer_value_label, f"Total: {dealer_value}")
 
         # Mostrar cartas del jugador
-        for i, card in enumerate(self.game.player_hand):
-            if i < len(self.player_card_labels):
+        for i, label in enumerate(self.player_card_labels):
+            if i < len(self.game.player_hand):
+                card = self.game.player_hand[i]
                 pixmap = self.load_card_image(card)
-                self.player_card_labels[i].setPixmap(pixmap)
-                self.player_card_labels[i].setScaledContents(True)
-                self.player_card_labels[i].show()
+                card_key = ("player", i, str(card.value), str(card.suit), False)
+                self._update_card_label(label, pixmap, card_key)
+            else:
+                self._hide_card_label(label)
 
         # Mostrar valor del jugador
         if self.game.player_hand:
             player_value = self.game.calculate_hand_value(self.game.player_hand)
-            self.player_value_label.setText(f"Total: {player_value}")
+            if self.game.split_mode and self.game.split_hands:
+                hand_no = self.game.current_hand_index + 1
+                hand_total = len(self.game.split_hands)
+                self._set_label_text_if_changed(
+                    self.player_value_label,
+                    f"Mano {hand_no}/{hand_total} - Total: {player_value}",
+                )
+            else:
+                self._set_label_text_if_changed(self.player_value_label, f"Total: {player_value}")
         else:
-            self.player_value_label.setText("")
+            self._set_label_text_if_changed(self.player_value_label, "")
 
         # Actualizar balance
-        self.balance_label.setText(f"Balance: ${self.game.balance}")
+        self._set_label_text_if_changed(self.balance_label, f"Balance: ${self.game.balance}")
+
+    def _set_label_text_if_changed(self, label: QLabel, text: str):
+        if label.text() != text:
+            label.setText(text)
+
+    def _update_card_label(
+        self,
+        label: QLabel,
+        pixmap: QPixmap,
+        card_key: tuple[str, int, str, str, bool],
+    ):
+        if label.property("_last_card_key") != card_key:
+            label.setPixmap(pixmap)
+            label.setProperty("_last_card_key", card_key)
+
+        if not label.property("_scaled_contents"):
+            label.setScaledContents(True)
+            label.setProperty("_scaled_contents", True)
+
+        if not label.isVisible():
+            label.show()
+
+    def _hide_card_label(self, label: QLabel):
+        if label.property("_last_card_key") is not None:
+            label.clear()
+            label.setProperty("_last_card_key", None)
+
+        if label.isVisible():
+            label.hide()
 
     def deal_cards(self):
         """Reparte las cartas iniciales"""
@@ -559,45 +959,51 @@ class BlackJackWindow(QMainWindow):
             QMessageBox.warning(self, "Error", "No se pudo colocar la apuesta.")
             return
 
+        self._round_event_reported = False
+
+        started_at = time.perf_counter()
         self.game.start_new_hand()
         self.update_display()
 
-        # Verificar si el jugador tiene Blackjack
-        if self.game.is_blackjack(self.game.player_hand):
-            result, winnings = self.game.resolve_hand()
-            self.status_label.setText(result)
+        # Verificar si la lógica ya resolvió automáticamente (ej: Blackjack natural)
+        if self.game.state == GameState.BETTING:
+            self.finalize_round_if_finished()
             self.update_display()
-            self.set_action_buttons_enabled(False)
-            self.bet_spinbox.setEnabled(True)
-            self.deal_button.setEnabled(True)
         else:
             self.status_label.setText(f"Apuesta: ${bet_amount}. ¿Qué quieres hacer?")
             self.set_action_buttons_enabled(True)
             self.bet_spinbox.setEnabled(False)
             self.deal_button.setEnabled(False)
+            self.update_turn_status()
+
+        try:
+            self._play_sound("play_card_deal")
+        except Exception:
+            pass
+
+        self._record_ui_action_latency("deal", started_at)
 
     def hit(self):
         """El jugador pide una carta"""
+        started_at = time.perf_counter()
         self.game.hit()
+        try:
+            self._play_sound("play_card_deal")
+        except Exception:
+            pass
         self.update_display()
-
-        if self.game.state == GameState.GAME_OVER:
-            result, winnings = self.game.resolve_hand()
-            self.status_label.setText(result)
-            self.set_action_buttons_enabled(False)
-            self.bet_spinbox.setEnabled(True)
-            self.deal_button.setEnabled(True)
+        self.finalize_round_if_finished()
+        self.update_turn_status()
+        self._record_ui_action_latency("hit", started_at)
 
     def stand(self):
         """El jugador se planta"""
+        started_at = time.perf_counter()
         self.game.stand()
         self.update_display()
-
-        result, winnings = self.game.resolve_hand()
-        self.status_label.setText(result)
-        self.set_action_buttons_enabled(False)
-        self.bet_spinbox.setEnabled(True)
-        self.deal_button.setEnabled(True)
+        self.finalize_round_if_finished()
+        self.update_turn_status()
+        self._record_ui_action_latency("stand", started_at)
 
     def double_down(self):
         """El jugador dobla su apuesta"""
@@ -605,17 +1011,59 @@ class BlackJackWindow(QMainWindow):
             QMessageBox.warning(self, "Error", "No puedes doblar en este momento.")
             return
 
+        started_at = time.perf_counter()
         self.game.double_down()
+        try:
+            self._play_sound("play_chip_place")
+        except Exception:
+            pass
         self.update_display()
+        self.finalize_round_if_finished()
+        self.update_turn_status()
+        self._record_ui_action_latency("double", started_at)
 
-        result, winnings = self.game.resolve_hand()
-        self.status_label.setText(result)
-        self.set_action_buttons_enabled(False)
-        self.bet_spinbox.setEnabled(True)
-        self.deal_button.setEnabled(True)
+    def split_hand(self):
+        """Divide la mano actual en dos manos."""
+        if not self.game.split_hand():
+            QMessageBox.warning(self, "Error", "No puedes hacer split en este momento.")
+            return
+
+        started_at = time.perf_counter()
+        try:
+            self._play_sound("play_chip_place")
+        except Exception:
+            pass
+        self.update_display()
+        self.set_action_buttons_enabled(True)
+        self.bet_spinbox.setEnabled(False)
+        self.deal_button.setEnabled(False)
+        self.update_turn_status()
+        self._record_ui_action_latency("split", started_at)
+
+    def take_insurance(self):
+        """El jugador toma seguro cuando el dealer muestra As."""
+        if not self.game.take_insurance():
+            QMessageBox.warning(
+                self,
+                "Error",
+                "No puedes tomar seguro en este momento.",
+            )
+            return
+
+        try:
+            self._play_sound("play_chip_place")
+        except Exception:
+            pass
+
+        self.update_display()
+        self.status_label.setText(
+            f"Seguro tomado por ${self.game.insurance_bet}. El dealer continúa."
+        )
+        self.set_action_buttons_enabled(True)
 
     def closeEvent(self, a0):
         """Handle window close event"""
+        self._export_ui_metrics_baseline()
         if self.parent_window:
             self.parent_window.show()
         a0.accept()

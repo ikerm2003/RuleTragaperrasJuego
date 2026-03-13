@@ -7,8 +7,11 @@ presentación y proporcionando animaciones suaves para los rodillos.
 from __future__ import annotations
 
 import sys
+import time
+import json
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from datetime import datetime
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QAction, QColor, QFont, QResizeEvent
@@ -33,12 +36,20 @@ from PyQt6.QtWidgets import (
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
+PACKAGE_PARENT_DIR = ROOT_DIR.parent
+for path_entry in (PACKAGE_PARENT_DIR, ROOT_DIR):
+    str_path = str(path_entry)
+    if str_path not in sys.path:
+        sys.path.insert(0, str_path)
 
-from Tragaperras.tragaperras_table import SlotMachineTable, SlotMachineTableFactory
-from Tragaperras.tragaperras_logic import PAYLINES, SpinResult
-from config import config_manager, get_text
+from RuleTragaperrasJuego.Tragaperras.tragaperras_table import (
+    SlotMachineTable,
+    SlotMachineTableFactory,
+)
+from RuleTragaperrasJuego.Tragaperras.tragaperras_logic import PAYLINES, SpinResult
+from RuleTragaperrasJuego.config import config_manager, get_text
+from RuleTragaperrasJuego.game_events import GameRoundEvent, get_game_event_service
+from RuleTragaperrasJuego.sound_manager import get_sound_manager
 
 
 # ---------------------------------------------------------------------------
@@ -110,22 +121,31 @@ class ReelColumn(QFrame):
 
         self.highlighted: Dict[int, bool] = {}
 
+    def _set_label_text_if_changed(self, label: QLabel, text: str) -> None:
+        if label.text() != text:
+            label.setText(text)
+
+    def _set_label_style_if_changed(self, label: QLabel, style: str) -> None:
+        if label.property("_last_style") != style:
+            label.setStyleSheet(style)
+            label.setProperty("_last_style", style)
+
     def set_symbols(self, symbols: Sequence[str]) -> None:
         for label, symbol in zip(self.labels, symbols):
-            label.setText(symbol)
+            self._set_label_text_if_changed(label, symbol)
 
     def set_highlights(self, rows: Iterable[int]) -> None:
         self.highlighted = {row: True for row in rows}
         for index, label in enumerate(self.labels):
             if self.highlighted.get(index):
-                label.setStyleSheet(HIGHLIGHT_LABEL_STYLE)
+                self._set_label_style_if_changed(label, HIGHLIGHT_LABEL_STYLE)
             else:
-                label.setStyleSheet(BASE_LABEL_STYLE)
+                self._set_label_style_if_changed(label, BASE_LABEL_STYLE)
 
     def clear_highlights(self) -> None:
         self.highlighted.clear()
         for label in self.labels:
-            label.setStyleSheet(BASE_LABEL_STYLE)
+            self._set_label_style_if_changed(label, BASE_LABEL_STYLE)
 
 
 # ---------------------------------------------------------------------------
@@ -137,11 +157,16 @@ class SlotMachineWindow(QMainWindow):
 
     ROWS = 3
     COLUMNS = 3
+    UI_LATENCY_THRESHOLDS_MS: Dict[str, float] = {
+        "ui.slots.render_result_ms": 25.0,
+        "ui.slots.spin_end_to_end_ms": 2400.0,
+    }
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
 
         self.config = config_manager
+        self.sound_manager = get_sound_manager(self.config)
         self.table: SlotMachineTable = SlotMachineTableFactory.create_table(
             balance=1000,
             bet_per_line=5,
@@ -154,6 +179,8 @@ class SlotMachineWindow(QMainWindow):
 
         self.pending_result: Optional[SpinResult] = None
         self.is_animating: bool = False
+        self._spin_started_at: Optional[float] = None
+        self._ui_perf_metrics: Dict[str, List[float]] = {}
 
         self.reel_columns: List[ReelColumn] = []
         self.reel_timers: List[QTimer] = []
@@ -168,6 +195,14 @@ class SlotMachineWindow(QMainWindow):
         self._init_window()
         self._init_ui()
         self._update_info_labels()
+
+    def _play_sound(self, method_name: str, *args, **kwargs) -> None:
+        manager = self.sound_manager
+        if manager is None:
+            return
+        callback = getattr(manager, method_name, None)
+        if callable(callback):
+            callback(*args, **kwargs)
 
     # ------------------------------------------------------------------
     # Configuración inicial
@@ -428,6 +463,7 @@ class SlotMachineWindow(QMainWindow):
             return
 
         try:
+            self._play_sound("play_slot_spin")
             self._begin_animation()
             # Ejecuta la tirada (los callbacks actualizarán el estado)
             self.table.spin()
@@ -476,7 +512,7 @@ class SlotMachineWindow(QMainWindow):
         def handler() -> None:
             for row in range(self.ROWS):
                 symbol = self.table.sample_symbol()
-                self.symbol_labels[column][row].setText(symbol)
+                self._set_label_text_if_changed(self.symbol_labels[column][row], symbol)
 
         return handler
 
@@ -488,7 +524,7 @@ class SlotMachineWindow(QMainWindow):
             if self.pending_result:
                 column_symbols = [self.pending_result.grid[row][column] for row in range(self.ROWS)]
                 for row, symbol in enumerate(column_symbols):
-                    self.symbol_labels[column][row].setText(symbol)
+                    self._set_label_text_if_changed(self.symbol_labels[column][row], symbol)
             self._reveal_if_ready()
 
         return handler
@@ -503,6 +539,7 @@ class SlotMachineWindow(QMainWindow):
         self._end_animation()
 
     def _display_spin_result(self, result: SpinResult) -> None:
+        render_started_at = time.perf_counter()
         self._clear_highlights()
         winning_positions: Dict[Tuple[int, int], bool] = {}
         for line_win in result.line_wins:
@@ -516,14 +553,22 @@ class SlotMachineWindow(QMainWindow):
             else:
                 self.reel_columns[col].clear_highlights()
 
-        self.last_win_label.setText(f"{result.total_payout} ⚡")
-        self.total_bet_label.setText(f"{result.total_bet}")
+        self._set_label_text_if_changed(self.last_win_label, f"{result.total_payout} ⚡")
+        self._set_label_text_if_changed(self.total_bet_label, f"{result.total_bet}")
         if result.net_win >= 0:
-            self.message_label.setText(get_text('win_message').format(total=result.total_payout))
+            self._set_label_text_if_changed(
+                self.message_label,
+                get_text('win_message').format(total=result.total_payout),
+            )
         else:
-            self.message_label.setText(get_text('loss_message'))
+            self._set_label_text_if_changed(self.message_label, get_text('loss_message'))
 
         self._append_history(result)
+        self._record_ui_metric("ui.slots.render_result_ms", render_started_at)
+
+        if self._spin_started_at is not None:
+            self._record_ui_metric("ui.slots.spin_end_to_end_ms", self._spin_started_at)
+            self._spin_started_at = None
 
     def _clear_highlights(self) -> None:
         for reel in self.reel_columns:
@@ -533,14 +578,14 @@ class SlotMachineWindow(QMainWindow):
     # Callbacks desde la mesa
 
     def _on_balance_changed(self, balance: int) -> None:
-        self.balance_label.setText(f"{balance}")
+        self._set_label_text_if_changed(self.balance_label, f"{balance}")
 
     def _on_bet_changed(self, bet_per_line: int) -> None:
         if self.bet_spinbox.value() != bet_per_line:
             self.bet_spinbox.blockSignals(True)
             self.bet_spinbox.setValue(bet_per_line)
             self.bet_spinbox.blockSignals(False)
-        self.bet_label.setText(f"{bet_per_line}")
+        self._set_label_text_if_changed(self.bet_label, f"{bet_per_line}")
         self._update_total_bet()
 
     def _on_lines_changed(self, lines: Sequence[int]) -> None:
@@ -552,18 +597,39 @@ class SlotMachineWindow(QMainWindow):
         self._update_total_bet()
 
     def _on_spin_started(self, total_bet: int, **_kwargs) -> None:
-        self.total_bet_label.setText(str(total_bet))
-        self.message_label.setText(get_text('spinning_message'))
+        self._spin_started_at = time.perf_counter()
+        self._set_label_text_if_changed(self.total_bet_label, str(total_bet))
+        self._set_label_text_if_changed(self.message_label, get_text('spinning_message'))
 
     def _on_spin_completed(self, result: SpinResult) -> None:
         self.pending_result = result
         self._update_info_labels(result)
+        if result.total_payout >= result.total_bet * 10 and result.total_payout > 0:
+            self._play_sound("play_jackpot")
+        elif result.net_win > 0:
+            self._play_sound("play_win", big_win=result.net_win >= max(200, result.total_bet * 5))
+        elif result.net_win < 0:
+            self._play_sound("play_lose")
+        else:
+            self._play_sound("play_notification")
+        try:
+            get_game_event_service().record_round(
+                GameRoundEvent(
+                    game_type="slots",
+                    rounds_played=1,
+                    wagered=int(result.total_bet),
+                    net_win=int(result.net_win),
+                )
+            )
+        except Exception:
+            pass
         self._reveal_if_ready()
 
     def _on_statistics_changed(self, statistics) -> None:
         rtp_percent = statistics.rtp * 100 if statistics.total_bet else 0.0
-        self.stats_label.setText(
-            f"{statistics.total_spins} | RTP {rtp_percent:.1f}% | Δ {statistics.net_profit}"
+        self._set_label_text_if_changed(
+            self.stats_label,
+            f"{statistics.total_spins} | RTP {rtp_percent:.1f}% | Δ {statistics.net_profit}",
         )
 
     def _on_autoplay_changed(self, enabled: bool) -> None:
@@ -594,11 +660,11 @@ class SlotMachineWindow(QMainWindow):
 
     def _on_add_credits_clicked(self) -> None:
         self.table.add_credits(200)
-        self.message_label.setText(get_text('credits_added'))
+        self._set_label_text_if_changed(self.message_label, get_text('credits_added'))
 
     def _on_reset_statistics_clicked(self) -> None:
         self.table.reset_statistics()
-        self.message_label.setText(get_text('statistics_reset'))
+        self._set_label_text_if_changed(self.message_label, get_text('statistics_reset'))
 
     def _on_autoplay_button_clicked(self) -> None:
         enabled = self.autoplay_button.isChecked()
@@ -625,15 +691,87 @@ class SlotMachineWindow(QMainWindow):
     # Utilidades
 
     def _update_info_labels(self, result: Optional[SpinResult] = None) -> None:
-        self.balance_label.setText(f"{self.table.balance}")
-        self.bet_label.setText(f"{self.table.bet_per_line}")
+        self._set_label_text_if_changed(self.balance_label, f"{self.table.balance}")
+        self._set_label_text_if_changed(self.bet_label, f"{self.table.bet_per_line}")
         self._update_total_bet()
         if result is not None:
-            self.last_win_label.setText(f"{result.total_payout} ⚡")
+            self._set_label_text_if_changed(self.last_win_label, f"{result.total_payout} ⚡")
 
     def _update_total_bet(self) -> None:
         total_bet = self.table.bet_per_line * len(self.table.get_active_lines())
-        self.total_bet_label.setText(f"{total_bet}")
+        self._set_label_text_if_changed(self.total_bet_label, f"{total_bet}")
+
+    def _set_label_text_if_changed(self, label: QLabel, text: str) -> None:
+        if label.text() != text:
+            label.setText(text)
+
+    def _record_ui_metric(self, metric_name: str, started_at: float) -> None:
+        elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+        if metric_name not in self._ui_perf_metrics:
+            self._ui_perf_metrics[metric_name] = []
+        self._ui_perf_metrics[metric_name].append(elapsed_ms)
+        if len(self._ui_perf_metrics[metric_name]) > 100:
+            self._ui_perf_metrics[metric_name] = self._ui_perf_metrics[metric_name][-100:]
+
+    def _build_metric_summary(self, metric_name: str, samples: List[float]) -> Dict[str, object]:
+        ordered = sorted(samples)
+        count = len(ordered)
+        p95_index = max(0, min(count - 1, int(count * 0.95) - 1))
+        avg_ms = sum(ordered) / count
+        threshold_ms = self.UI_LATENCY_THRESHOLDS_MS.get(metric_name)
+
+        return {
+            "count": count,
+            "avg_ms": round(avg_ms, 3),
+            "min_ms": round(ordered[0], 3),
+            "max_ms": round(ordered[-1], 3),
+            "p95_ms": round(ordered[p95_index], 3),
+            "threshold_ms": threshold_ms,
+            "within_threshold": (
+                None
+                if threshold_ms is None
+                else round(avg_ms, 3) <= threshold_ms
+            ),
+        }
+
+    def _export_ui_metrics_baseline(self) -> None:
+        if not self._ui_perf_metrics:
+            return
+
+        report_path = ROOT_DIR / "performance_baseline.json"
+        summary = {
+            metric: self._build_metric_summary(metric, samples)
+            for metric, samples in self._ui_perf_metrics.items()
+            if samples
+        }
+
+        if not summary:
+            return
+
+        snapshot = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "source": "tragaperras",
+            "metrics": summary,
+        }
+
+        data = {"snapshots": []}
+        if report_path.exists():
+            try:
+                with open(report_path, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict) and isinstance(loaded.get("snapshots"), list):
+                    data = loaded
+            except (OSError, json.JSONDecodeError):
+                data = {"snapshots": []}
+
+        data["snapshots"].append(snapshot)
+        data["snapshots"] = data["snapshots"][-200:]
+
+        try:
+            with open(report_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass
 
     def _append_history(self, result: SpinResult) -> None:
         summary = (
@@ -666,6 +804,10 @@ class SlotMachineWindow(QMainWindow):
             self._handle_resize(a0)
         else:
             return
+
+    def closeEvent(self, a0) -> None:
+        self._export_ui_metrics_baseline()
+        a0.accept()
 
 
 def launch_slot_machine() -> int:

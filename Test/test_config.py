@@ -110,6 +110,7 @@ class TestConfigManager(unittest.TestCase):
         self.assertIn('show_tooltips', config['interface'])
         self.assertIn('card_animation_enabled', config['interface'])
         self.assertIn('sound_enabled', config['interface'])
+        self.assertIn('debug_mode', config['interface'])
         
         # Test gameplay section
         self.assertIn('auto_fold_timeout', config['gameplay'])

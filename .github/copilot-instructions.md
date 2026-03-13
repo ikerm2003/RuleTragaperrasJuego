@@ -1,158 +1,82 @@
-# GitHub Copilot Instructions for RuleTragaperrasJuego
+# Copilot Instructions for RuleTragaperrasJuego
 
-## Project Overview
+## Big Picture
+- This is a **PyQt6 desktop casino app** with a central launcher in `main.py` and game modules in `Poker/`, `Blackjack/`, `Ruleta/`, `Tragaperras/`.
+- Architecture is intentionally split into **UI vs logic** per game (e.g., `Poker/poker_ui.py` + `Poker/poker_logic.py` + `Poker/poker_table.py`).
+- Cross-cutting state is centralized in `config.py` via `config_manager` (persistent `casino_config.json`, language, balances, stats, missions, achievements).
+- Card games follow shared abstractions in `cardCommon.py` (`BaseCard`, `BaseDeck`). Keep new card logic aligned with this ABC pattern.
 
-RuleTragaperrasJuego is a Python-based casino game collection featuring multiple card and casino games. The main implemented component is a comprehensive Texas Hold'em Poker module with a modern PyQt6 GUI, supporting up to 9 players with bot AI.
+## Runtime & Module Boundaries
+- `main.py` dynamically imports each game and uses a common launch contract: each `open_*_window(...)` returns `(window, owns_app, app)`.
+- Keep embedded-launch behavior intact: only call `app.exec()` when `owns_app` is `True`.
+- Entry points often inject project paths into `sys.path` (see `Poker/poker_main.py`, `Ruleta/ruleta_main.py`, `Tragaperras/tragaperras_main.py`). Do not break this unless refactoring all entry points consistently.
+- Multiplayer has a **single source of truth** in `Server/multiplayer_server.py`; root `multiplayer_server.py` is a compatibility wrapper.
 
-## Architecture & File Organization
+## Developer Workflows (actual project)
+- Environment setup (Windows): `setup_env.bat`.
+- Run app: `python main.py`.
+- Run modules directly:
+  - `python Poker/poker_main.py`
+  - `python Blackjack/blackjack.py`
+  - `python Ruleta/ruleta_main.py`
+  - `python Tragaperras/tragaperras_main.py`
+- Tests use `unittest` (not pytest). Typical commands:
+  - `python -m unittest Test.test_all -v`
+  - `python -m unittest Test.test_main -v`
+  - `python -m unittest Test.test_blackjack_logic -v`
 
-### Core Components
-- **Poker Module** (Primary): Full-featured Texas Hold'em implementation
-  - `poker_logic.py`: Core game rules, hand evaluation, betting logic
-  - `poker_table.py`: Table management, player positioning, 9-player support
-  - `poker_ui.py`: PyQt6 responsive UI with professional poker table design
-  - `poker_main.py`: Application entry point
-  - `test_poker.py`: Comprehensive unit tests (30 tests)
+## Project-Specific Conventions
+- Preserve Spanish UX strings where already used; internationalized text is accessed through `get_text(...)` from `config.py`.
+- Prefer minimal, surgical edits in existing modules rather than introducing new framework layers.
+- Keep persistence semantics stable: many config operations call `save_config()` immediately.
+- Main UI shortcuts and game-launch flow in `main.py` are part of user-facing behavior; avoid changing keybindings/launch semantics unless requested.
 
-- **Base Classes**: Abstract base class pattern for extensibility
-  - `cardCommon.py`: Abstract base classes for cards and decks
-  - ABC pattern enforced for all card games
+## Integration Points
+- `main.py` integrates `AchievementManager` and `MissionManager` and relies on config-backed stats/balance updates.
+- Game UIs should update shared player state through `config_manager` APIs, not ad-hoc file writes.
+- Multiplayer HTTP/WebSocket behavior is implemented in `Server/multiplayer_server.py` (token/session rules + simple web client page).
 
-- **Other Games** (Stubs): Ready for implementation
-  - `blackjack.py`: Blackjack implementation
-  - `ruleta.py`: Roulette (empty stub)
-  - `tragaperras.py`: Slot machine (empty stub)
-  - `mainui.py`: Main menu interface
+## Session Continuity (required in this repo)
+- Before finishing an implementation session, update:
+  - `roadmap.md` (completed, in-progress, next step)
+  - `README.md` (short continuity status block)
+  - `.github/copilot-instructions.md` (if reality changed)
+- At session start, read `roadmap.md` first and continue from latest log entry.
 
-### Key Design Patterns
-- **Abstract Base Classes**: All card games inherit from `cardCommon.py` ABC structure
-- **Factory Pattern**: `PokerTableFactory` for different table configurations
-- **Separation of Concerns**: Clear separation between UI (`poker_ui.py`) and logic (`poker_logic.py`)
-- **Responsive Design**: UI scales dynamically with window size
-
-## Development Guidelines
-
-### Code Style & Standards
-- **Language**: Python 3.x with type hints where applicable
-- **GUI Framework**: PyQt6 for all UI components
-- **Testing**: unittest framework (not pytest)
-- **Documentation**: Comprehensive docstrings with examples
-- **Error Handling**: Robust error handling throughout game logic
-
-### Testing Patterns
-```python
-# Use unittest.TestCase for all tests
-class TestPokerLogic(unittest.TestCase):
-    def setUp(self):
-        self.table = PokerTable(small_blind=10, big_blind=20)
-    
-    def test_feature_name(self):
-        """Test description with expected behavior"""
-        # Test implementation
-```
-
-- **Test Structure**: Organized by component (`TestPokerCards`, `TestPokerTable`, etc.)
-- **Coverage**: 30 comprehensive tests covering all poker functionality
-- **Run Tests**: `python -m unittest test_poker.py -v`
-
-### UI Development
-- **Framework**: PyQt6 with responsive scaling utilities
-- **Layout**: Grid-based positioning for poker table (supports 2-9 players)
-- **Styling**: Professional casino appearance with gradients and shadows
-- **Scalability**: All UI elements scale with window size using `get_scaled_size()`
-
-### Game Logic Patterns
-```python
-# Player actions using Enums
-class PlayerAction(Enum):
-    FOLD = "fold"
-    CHECK = "check"
-    CALL = "call"
-    RAISE = "raise"
-    ALL_IN = "all_in"
-
-# Hand evaluation with proper tie-breaking
-def evaluate_hand(self, cards: List[PokerCard]) -> Tuple[HandRanking, List[int]]:
-    """Returns (hand_type, tie_breaker_values)"""
-```
-
-## Component Relationships
-
-### Poker Module Flow
-1. **Entry Point**: `poker_main.py` creates window and table
-2. **Table Management**: `poker_table.py` handles game state and players
-3. **Game Logic**: `poker_logic.py` processes actions and evaluates hands
-4. **UI Updates**: `poker_ui.py` reflects game state changes
-5. **Testing**: `test_poker.py` validates all components
-
-### Inheritance Hierarchy
-```
-BaseCard (ABC) <- PokerCard
-BaseDeck (ABC) <- PokerDeck
-PokerTable <- BasePokerTable (ABC) <- NinePlayerTable
-```
-
-## Implementation Guidelines
-
-### Adding New Games
-1. Inherit from appropriate ABC in `cardCommon.py`
-2. Follow the poker module structure (logic/ui/table separation)
-3. Add comprehensive unit tests
-4. Update main UI integration in `mainui.py`
-
-### Poker Enhancements
-- **AI Strategy**: Extend bot logic in `poker_table.py`
-- **UI Features**: Add animations/effects in `poker_ui.py`
-- **Game Variants**: Create new table types via factory pattern
-- **Tournament**: Extend table management for multi-table support
-
-### Current Capabilities
-- ✅ Full Texas Hold'em rules implementation
-- ✅ 9-player table support with proper positioning
-- ✅ Bot players with basic AI strategy
-- ✅ Responsive PyQt6 UI with professional styling
-- ✅ Comprehensive hand evaluation (including edge cases)
-- ✅ Complete betting system with all actions
-- ✅ Robust error handling and validation
-- ✅ 100% test coverage for poker functionality
-
-### Future Roadmap (from roadmap.md)
-- [ ] MainUI integration
-- [ ] Blackjack completion
-- [ ] Ruleta implementation
-- [ ] Tragaperras implementation
-- [ ] Multiplayer support
-- [ ] Daily missions system
-- [ ] Auto-refill functionality
-- [ ] Keyboard shortcuts
-
-## Debug & Troubleshooting
-
-### Common Issues
-1. **PyQt6 Dependencies**: `pip install PyQt6`
-2. **Card Display Issues**: Check `load_card_image()` in UI module
-3. **Game Logic Errors**: Run specific test classes to isolate issues
-
-### Debug Mode
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-# Enables detailed game state logging
-```
-
-### Performance
-- UI animations and effects are optimized for smooth gameplay
-- Card shuffling uses Python's `random.shuffle()` for proper randomization
-- Memory management: Cards and players are properly cleaned up between hands
-
-## Context for AI Assistance
-
-When working on this project:
-- **Preserve ABC Structure**: Always maintain abstract base class patterns
-- **Test First**: Add/update unit tests for any logic changes
-- **UI Separation**: Keep UI code separate from game logic
-- **Scalable Design**: Ensure any UI changes work across different window sizes
-- **Spanish Context**: Some UI text and comments may be in Spanish (this is intentional)
-- **Backward Compatibility**: Preserve existing API when adding features
-
-The project is well-structured with clear separation of concerns, comprehensive testing, and professional UI design. Focus on maintaining these standards when making modifications or additions.
+## Recent Optimization Reality
+- P0 optimization started: `config.py` includes `ConfigManager.batch_update()` to coalesce repeated `save_config()` calls into a single write.
+- Batch persistence already applied to hot paths in `achievements.py` (`update_game_stat`, `update_win`) and `missions.py` (`_load_missions`, `update_on_hand_played`, `update_on_win`).
+- Pixmap/card render caching is now applied in Poker (`Poker/poker_ui.py`) and Blackjack (`Blackjack/blackjack.py`).
+- Differential UI updates are now applied in Poker (`update_community_cards`, `update_player_displays`) and Blackjack (`update_display`) to avoid redundant `setPixmap`/`setStyleSheet`/`setText` calls.
+- Differential UI updates are now also applied in Tragaperras (`Tragaperras/tragaperras_ui.py`) for reel symbols, highlights and info labels to avoid redundant `setText`/`setStyleSheet` calls.
+- UI baseline instrumentation is now available for critical actions in Blackjack and Tragaperras (local latency samples in UI layer).
+- Consolidated baseline snapshots are now exported to `performance_baseline.json` with summaries (`avg/min/max/p95`) and threshold checks for critical actions.
+- Baseline snapshots are now surfaced in main UI (`Juego` > `Rendimiento UI`) for session inspection.
+- Initial CI workflow is available at `.github/workflows/tests.yml` for critical regression tests.
+- Automatic snapshot-to-snapshot comparison (`Δ avg`) is now available in performance view.
+- Stronger visual alerts are now available in performance view (severity levels + color emphasis for status and deltas).
+- Historical CSV export is now available from `Juego` > `Rendimiento UI` (`performance_baseline_history.csv`).
+- Source/metric filters and ISO time-range filtering are now available in performance view.
+- CSV export in performance view now respects active filters for incremental historical analysis.
+- Quick time-range presets are now available in performance view (`Todo`, `Ultima hora`, `Ultimas 24h`, `Ultimos 7 dias`).
+- Aggregated trend view per metric is now available in performance view for filtered snapshots.
+- Aggregated comparison view per source is now available in performance view for filtered snapshots.
+- Interactive sorting is now available in performance tables for aggregated views and per-snapshot detail.
+- Main UI startup and window transition timings are now instrumented and exported to `performance_baseline.json` under source `main` when the app closes.
+- Main UI now includes deeper per-phase timings for each game launch (`ui.main.import_*_ms`, `ui.main.open_*_ms`, `ui.main.transition_to_*_ms`) and restore transition timings (`ui.main.restore_transition_*_ms`).
+- Main bootstrap timings are now instrumented before `MainUI` creation (`ui.main.bootstrap.*`: auth/login imports, DB init, user config load, window init) and merged into source `main` baseline exports.
+- Performance view now includes a dedicated phase-level breakdown for `main` (`bootstrap`, `import`, `open`, `transition`) with aggregated period comparison.
+- Performance view now includes phase-level alerting (`OK`, `ALTO`, `CRITICO`, `REGRESION`) combining threshold breach ratio and period delta.
+- Unified game progression contract is now implemented in `game_events.py` and integrated at round-end in Blackjack, Poker, Ruleta and Tragaperras.
+- Achievement stat mapping now keeps roulette/slots consistency (`roulette_spins`, `slots_spins`) instead of mixed hand/spin semantics.
+- Cross-game UX checklist for base consistency is documented in `ux_checklist_fase_a.md` and applied as Fase A baseline.
+- Fase A in `roadmap.md` is now completed.
+- Fase B has started with real gameplay-audio integration: `sound_manager.py` now supports category volumes/mutes and event-driven playback hooks.
+- SFX hooks are now connected in Blackjack, Poker, Ruleta and Tragaperras for key gameplay actions and round results.
+- Main UI now performs contextual music transitions (menu/game/restore) and progression audio is emitted from `game_events.py` for achievements/missions.
+- Contextual music routing is now centralized in `sound_manager.py` through `MusicContext` with ordered fallback candidates and config overrides (`interface.music_track_<context>`).
+- Main UI performance instrumentation has been refactored out of `main.py` into `performance_debug.py` to keep production UI code lean.
+- Main performance metrics/export/view are now debug-only (`interface.debug_mode` or `CASINO_DEBUG_PERF=1`) instead of always-on in normal UX.
+- Main baseline snapshot export now runs asynchronously in background to avoid blocking UI transitions/close path.
+- Poker startup is now protected against early Qt `resizeEvent` emissions by initializing `_card_pixmap_cache` before potential resize-triggering calls and guarding the resize handler.
+- Next delivery target (roadmap-only): complete Fase B audio with real music assets/pipeline in `sounds/music` and tune per-context gain/mix.

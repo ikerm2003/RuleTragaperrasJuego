@@ -7,7 +7,7 @@ Manages daily missions, rotation, and rewards
 import random
 from enum import Enum
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime
 
 
@@ -205,8 +205,9 @@ class MissionManager:
         
         # Check if we need to generate new missions
         if last_mission_date != today:
-            self._generate_daily_missions()
-            self.config.reset_daily_missions()
+            with self.config.batch_update():
+                self._generate_daily_missions()
+                self.config.reset_daily_missions()
         else:
             # Load existing missions
             mission_data = self.config.get_daily_missions()
@@ -216,7 +217,7 @@ class MissionManager:
                 if mission:
                     self.current_missions.append(mission)
     
-    def _find_mission_template(self, mission_id: str) -> Mission:
+    def _find_mission_template(self, mission_id: str) -> Optional[Mission]:
         """Find a mission template by ID"""
         for mission in self.mission_templates:
             if mission.id == mission_id:
@@ -281,47 +282,49 @@ class MissionManager:
     def update_on_hand_played(self, game_type: str) -> List[Mission]:
         """Update missions when a hand is played"""
         completed = []
-        
-        for mission in self.current_missions:
-            if self.config.is_mission_completed(mission.id):
-                continue
-            
-            # Update general play missions
-            if mission.mission_type == MissionType.PLAY_HANDS:
-                if self.update_mission_progress(mission, 1):
-                    completed.append(mission)
-            
-            # Update game-specific missions
-            elif mission.mission_type == MissionType.PLAY_GAME:
-                if mission.game_type == game_type:
+
+        with self.config.batch_update():
+            for mission in self.current_missions:
+                if self.config.is_mission_completed(mission.id):
+                    continue
+
+                # Update general play missions
+                if mission.mission_type == MissionType.PLAY_HANDS:
                     if self.update_mission_progress(mission, 1):
                         completed.append(mission)
+
+                # Update game-specific missions
+                elif mission.mission_type == MissionType.PLAY_GAME:
+                    if mission.game_type == game_type:
+                        if self.update_mission_progress(mission, 1):
+                            completed.append(mission)
         
         return completed
     
     def update_on_win(self, amount: int) -> List[Mission]:
         """Update missions when a hand is won"""
         completed = []
-        
-        for mission in self.current_missions:
-            if self.config.is_mission_completed(mission.id):
-                continue
-            
-            # Update win count missions
-            if mission.mission_type == MissionType.WIN_HANDS:
-                if self.update_mission_progress(mission, 1):
-                    completed.append(mission)
-            
-            # Update win amount missions
-            elif mission.mission_type == MissionType.WIN_AMOUNT:
-                if self.update_mission_progress(mission, amount):
-                    completed.append(mission)
-            
-            # Update big win missions
-            elif mission.mission_type == MissionType.BIG_WIN:
-                if amount >= mission.target:
+
+        with self.config.batch_update():
+            for mission in self.current_missions:
+                if self.config.is_mission_completed(mission.id):
+                    continue
+
+                # Update win count missions
+                if mission.mission_type == MissionType.WIN_HANDS:
+                    if self.update_mission_progress(mission, 1):
+                        completed.append(mission)
+
+                # Update win amount missions
+                elif mission.mission_type == MissionType.WIN_AMOUNT:
                     if self.update_mission_progress(mission, amount):
                         completed.append(mission)
+
+                # Update big win missions
+                elif mission.mission_type == MissionType.BIG_WIN:
+                    if amount >= mission.target:
+                        if self.update_mission_progress(mission, amount):
+                            completed.append(mission)
         
         return completed
     

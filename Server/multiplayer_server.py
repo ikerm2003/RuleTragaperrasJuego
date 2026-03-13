@@ -21,7 +21,10 @@ import json
 import logging
 import uuid
 import argparse
+import pathlib
+from http import HTTPStatus
 import websockets
+from websockets.legacy.server import WebSocketServerProtocol, serve
 from websockets.exceptions import ConnectionClosed
 
 logging.basicConfig(
@@ -31,7 +34,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # token (str) -> websocket activo
-active_connections: dict[str, websockets.WebSocketServerProtocol] = {}
+active_connections: dict[str, WebSocketServerProtocol] = {}
 
 # token -> metadata del jugador (nombre, etc.)
 players: dict[str, dict] = {}
@@ -54,7 +57,7 @@ async def broadcast(msg: dict, exclude: str | None = None) -> None:
     await asyncio.gather(*[ws.send(data) for ws in targets], return_exceptions=True)
 
 
-async def send(ws: websockets.WebSocketServerProtocol, msg: dict) -> None:
+async def send(ws: WebSocketServerProtocol, msg: dict) -> None:
     """Envía un mensaje JSON a una conexión específica."""
     try:
         await ws.send(json.dumps(msg))
@@ -67,7 +70,7 @@ async def send(ws: websockets.WebSocketServerProtocol, msg: dict) -> None:
 # ---------------------------------------------------------------------------
 
 async def perform_handshake(
-    websocket: websockets.WebSocketServerProtocol,
+    websocket: WebSocketServerProtocol,
 ) -> str | None:
     """
     Espera el mensaje de handshake del cliente y devuelve el token asignado.
@@ -118,7 +121,7 @@ async def perform_handshake(
 # Procesado de mensajes
 # ---------------------------------------------------------------------------
 
-async def process_message(token: str, websocket: websockets.WebSocketServerProtocol, msg: dict) -> None:
+async def process_message(token: str, websocket: WebSocketServerProtocol, msg: dict) -> None:
     msg_type = msg.get("type")
 
     if msg_type == "set_name":
@@ -159,11 +162,38 @@ def _player_list() -> list[dict]:
     ]
 
 
+async def process_request(path, request_headers):
+    """Responde peticiones HTTP normales y deja pasar el upgrade a WebSocket."""
+    if request_headers.get("Upgrade", "").lower() == "websocket":
+        return None
+
+    base_dir = pathlib.Path(__file__).parent
+    web_file = base_dir / "multiplayer.html"
+
+    if web_file.exists():
+        body = web_file.read_bytes()
+    else:
+        body = """<!doctype html>
+<html lang=\"es\">
+<head><meta charset=\"utf-8\"><title>Servidor multijugador</title></head>
+<body>
+<h1>Servidor multijugador activo</h1>
+<p>Conéctate por WebSocket al puerto configurado del servidor.</p>
+</body>
+</html>""".encode("utf-8")
+
+    headers = [
+        ("Content-Type", "text/html; charset=utf-8"),
+        ("Content-Length", str(len(body))),
+    ]
+    return HTTPStatus.OK, headers, body
+
+
 # ---------------------------------------------------------------------------
 # Handler principal de cada conexión
 # ---------------------------------------------------------------------------
 
-async def handle_connection(websocket: websockets.WebSocketServerProtocol) -> None:
+async def handle_connection(websocket: WebSocketServerProtocol) -> None:
     token = await perform_handshake(websocket)
     if token is None:
         return  # handshake rechazado
@@ -228,8 +258,9 @@ async def handle_connection(websocket: websockets.WebSocketServerProtocol) -> No
 
 async def main(host: str, port: int) -> None:
     log.info("Servidor multijugador iniciado en ws://%s:%d", host, port)
+    log.info("Interfaz HTTP disponible en http://%s:%d", host, port)
     log.info("Máximo de jugadores: %d", MAX_PLAYERS)
-    async with websockets.serve(handle_connection, host, port):
+    async with serve(handle_connection, host, port, process_request=process_request):
         await asyncio.Future()  # ejecutar indefinidamente
 
 

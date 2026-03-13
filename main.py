@@ -7,7 +7,15 @@ Gestiona la navegación entre juegos y la configuración general de la aplicaci�
 """
 
 import importlib
+import os
 import sys
+import time
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent
+PACKAGE_PARENT_DIR = ROOT_DIR.parent
+if str(PACKAGE_PARENT_DIR) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_PARENT_DIR))
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
@@ -33,24 +41,43 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from achievements import AchievementManager
-from config import config_manager, get_text
-from config_dialog import ConfigDialog
-from missions import MissionManager
+from RuleTragaperrasJuego.achievements import AchievementManager
+from RuleTragaperrasJuego.config import config_manager, get_text
+from RuleTragaperrasJuego.config_dialog import ConfigDialog
+from RuleTragaperrasJuego.missions import MissionManager
+from RuleTragaperrasJuego.performance_debug import PerformanceDebugManager
+from RuleTragaperrasJuego.sound_manager import MusicContext, get_sound_manager
 
 
 class MainUI(QMainWindow):
-    def __init__(self):
+    UI_LATENCY_THRESHOLDS_MS: dict[str, float] = PerformanceDebugManager.DEFAULT_THRESHOLDS_MS
+
+    def __init__(self, startup_started_at=None, bootstrap_metrics=None):
         super().__init__()
 
         # Load config if available
         self.config = config_manager
+
+        # Include logged-in username in the window title
+        username = self.config.get_logged_username()
         title = get_text("casino_title")
+        if username:
+            title = f"{title}  –  {username}"
 
         self._poker_window = None
         self._slots_window = None
         self._blackjack_window = None
         self._roulette_window = None
+        self._startup_started_at = startup_started_at
+        self._bootstrap_metrics = bootstrap_metrics if isinstance(bootstrap_metrics, dict) else {}
+        self._ui_perf_metrics: dict[str, list[float]] = {}
+        self._perf_debug_enabled = self._is_debug_mode()
+        self.perf_debug = PerformanceDebugManager(
+            enabled=self._perf_debug_enabled,
+            base_dir=Path(__file__).resolve().parent,
+            thresholds=self.UI_LATENCY_THRESHOLDS_MS,
+        )
+        self.sound_manager = get_sound_manager(self.config)
 
         # Initialize achievement and mission managers
         self.achievement_manager = AchievementManager(self.config)
@@ -69,8 +96,55 @@ class MainUI(QMainWindow):
         self.init_ui()
         self.setup_shortcuts()
 
+        self._start_menu_music()
+
         # Check for daily refill
         self.check_daily_refill()
+
+        if isinstance(self._startup_started_at, (int, float)):
+            self._record_ui_metric("ui.main.startup_ms", self._startup_started_at)
+
+        self._record_bootstrap_metrics(self._bootstrap_metrics)
+
+    def _is_debug_mode(self) -> bool:
+        config_debug = bool(self.config.get("interface", "debug_mode", False))
+        env_debug = os.getenv("CASINO_DEBUG_PERF", "0") == "1"
+        return config_debug or env_debug
+
+    def _start_menu_music(self) -> None:
+        manager = self.sound_manager
+        if manager is None:
+            return
+        try:
+            manager.play_music_for_context(MusicContext.MENU)
+        except Exception:
+            pass
+
+    def _start_game_music(self, metric_suffix: str) -> None:
+        manager = self.sound_manager
+        if manager is None:
+            return
+        context_by_game = {
+            "poker": MusicContext.POKER,
+            "blackjack": MusicContext.BLACKJACK,
+            "roulette": MusicContext.ROULETTE,
+            "slots": MusicContext.SLOTS,
+        }
+        context = context_by_game.get(metric_suffix)
+        if context is None:
+            return
+        try:
+            manager.play_music_for_context(context)
+        except Exception:
+            pass
+
+    def _play_sound(self, method_name: str, *args, **kwargs) -> None:
+        manager = self.sound_manager
+        if manager is None:
+            return
+        callback = getattr(manager, method_name, None)
+        if callable(callback):
+            callback(*args, **kwargs)
 
     def init_ui(self):
         """Initialize the main UI"""
@@ -195,6 +269,19 @@ class MainUI(QMainWindow):
             self.config.set("display", "fullscreen", True)
         self.config.save_config()
 
+    def _logout(self) -> None:
+        """Log out the current user and close the application."""
+        reply = QMessageBox.question(
+            self,
+            "Cerrar sesión",
+            "¿Deseas cerrar sesión y salir del casino?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.config.logout()
+            QApplication.instance().quit()  # type: ignore[union-attr]
+
     def check_daily_refill(self):
         """Check and apply daily refill if applicable"""
         if self.config.check_daily_refill():
@@ -225,6 +312,11 @@ class MainUI(QMainWindow):
             if stats_action is not None:
                 stats_action.triggered.connect(self.show_statistics)
 
+            if self._perf_debug_enabled:
+                perf_action = game_menu.addAction("Rendimiento UI")
+                if perf_action is not None:
+                    perf_action.triggered.connect(self.show_performance_baseline)
+
             # Achievements
             achievements_action = game_menu.addAction(get_text("view_achievements"))
             if achievements_action is not None:
@@ -241,6 +333,16 @@ class MainUI(QMainWindow):
             config_action = settings_menu.addAction("Configuración...")
             if config_action is not None:
                 config_action.triggered.connect(self.show_config_dialog)
+
+        # Account menu (only visible when logged in)
+        if self.config.is_logged_in():
+            account_menu = menubar.addMenu(
+                f"👤 {self.config.get_logged_username()}"
+            )
+            if isinstance(account_menu, QMenu):
+                logout_action = account_menu.addAction("Cerrar sesión")
+                if logout_action is not None:
+                    logout_action.triggered.connect(self._logout)
 
         # Help menu
         help_menu = menubar.addMenu("Ayuda")
@@ -334,122 +436,133 @@ class MainUI(QMainWindow):
             f"{shortcuts_help}",
         )
 
-    def launch_poker(self):
-        """Launch poker game"""
+    def _launch_game(
+        self,
+        module_path: str,
+        open_function_name: str,
+        window_attr: str,
+        metric_suffix: str,
+        on_closed_handler,
+        import_error_message: str,
+        generic_error_message: str,
+        *,
+        open_kwargs: dict | None = None,
+        raise_import_error: bool = False,
+    ) -> None:
+        """Lanza un juego mediante import dinámico y maneja estado/errores comunes."""
+        started_at = time.perf_counter()
         try:
-            poker_module = importlib.import_module("Poker.poker_main")
-            open_poker_window = getattr(poker_module, "open_poker_window")
+            import_started_at = time.perf_counter()
+            game_module = importlib.import_module(module_path)
+            open_window = getattr(game_module, open_function_name)
+            self._record_ui_metric(f"ui.main.import_{metric_suffix}_ms", import_started_at)
 
+            transition_started_at = time.perf_counter()
             self.hide()
-            window, owns_app, app = open_poker_window(num_players=6, parent=self)
-            self._poker_window = window
-            window.destroyed.connect(self.on_poker_window_closed)
+            kwargs = open_kwargs or {}
+            open_started_at = time.perf_counter()
+            window, owns_app, app = open_window(parent=self, **kwargs)
+            self._record_ui_metric(f"ui.main.open_{metric_suffix}_ms", open_started_at)
+            setattr(self, window_attr, window)
+            window.destroyed.connect(on_closed_handler)
+            QApplication.processEvents()
+            self._start_game_music(metric_suffix)
+            self._record_ui_metric(
+                f"ui.main.transition_to_{metric_suffix}_ms", transition_started_at
+            )
+            self._record_ui_metric(f"ui.main.launch_{metric_suffix}_ms", started_at)
 
             if owns_app:
                 app.exec()
 
         except ImportError as e:
             self.show()
-            # QMessageBox.warning(self, "Error", "El juego de póker no está disponible.")
-            raise ImportError(e)
+            if raise_import_error:
+                raise ImportError(e)
+            QMessageBox.warning(self, "Error", import_error_message)
         except Exception as e:
             self.show()
             print(e)
-            QMessageBox.critical(self, "Error", f"Error al lanzar póker: {str(e)}")
+            QMessageBox.critical(self, "Error", f"{generic_error_message}: {str(e)}")
+
+    def _restore_main_window(self, window_attr: str, metric_suffix: str) -> None:
+        """Restaura la ventana principal al cerrar un sub-juego."""
+        started_at = time.perf_counter()
+        transition_started_at = time.perf_counter()
+        setattr(self, window_attr, None)
+        self.show()
+        QApplication.processEvents()
+        self._start_menu_music()
+        self._record_ui_metric(
+            f"ui.main.restore_transition_{metric_suffix}_ms", transition_started_at
+        )
+        self._record_ui_metric(f"ui.main.restore_{metric_suffix}_ms", started_at)
+
+    def launch_poker(self):
+        """Launch poker game"""
+        self._launch_game(
+            module_path="Poker.poker_main",
+            open_function_name="open_poker_window",
+            window_attr="_poker_window",
+            metric_suffix="poker",
+            on_closed_handler=self.on_poker_window_closed,
+            import_error_message="El juego de póker no está disponible.",
+            generic_error_message="Error al lanzar póker",
+            open_kwargs={"num_players": 6},
+            raise_import_error=True,
+        )
 
     def on_poker_window_closed(self, _obj=None):
         """Restore main window when the poker window is closed."""
-        self._poker_window = None
-        self.show()
+        self._restore_main_window("_poker_window", "poker")
 
     def launch_blackjack(self):
         """Launch blackjack game"""
-        try:
-            blackjack_module = importlib.import_module("Blackjack.blackjack")
-            open_blackjack_window = getattr(blackjack_module, "open_blackjack_window")
-
-            self.hide()
-            window, owns_app, app = open_blackjack_window(parent=self)
-            self._blackjack_window = window
-            window.destroyed.connect(self.on_blackjack_window_closed)
-
-            if owns_app:
-                app.exec()
-
-        except ImportError as e:
-            self.show()
-            QMessageBox.warning(
-                self, "Error", f"El juego de Blackjack no está disponible: {str(e)}"
-            )
-        except Exception as e:
-            self.show()
-            print(e)
-            QMessageBox.critical(self, "Error", f"Error al lanzar Blackjack: {str(e)}")
+        self._launch_game(
+            module_path="Blackjack.blackjack",
+            open_function_name="open_blackjack_window",
+            window_attr="_blackjack_window",
+            metric_suffix="blackjack",
+            on_closed_handler=self.on_blackjack_window_closed,
+            import_error_message="El juego de Blackjack no está disponible.",
+            generic_error_message="Error al lanzar Blackjack",
+        )
 
     def on_blackjack_window_closed(self, _obj=None):
         """Restore main window when the blackjack window is closed."""
-        self._blackjack_window = None
-        self.show()
+        self._restore_main_window("_blackjack_window", "blackjack")
 
     def launch_roulette(self):
         """Launch roulette game"""
-        try:
-            roulette_module = importlib.import_module("Ruleta.ruleta_main")
-            open_roulette_window = getattr(roulette_module, "open_roulette_window")
-
-            self.hide()
-            window, owns_app, app = open_roulette_window(parent=self)
-            self._roulette_window = window
-            window.destroyed.connect(self.on_roulette_window_closed)
-
-            if owns_app:
-                app.exec()
-
-        except ImportError as e:
-            self.show()
-            QMessageBox.warning(
-                self, "Error", f"El juego de ruleta no está disponible: {str(e)}"
-            )
-        except Exception as e:
-            self.show()
-            print(e)
-            QMessageBox.critical(self, "Error", f"Error al lanzar ruleta: {str(e)}")
+        self._launch_game(
+            module_path="Ruleta.ruleta_main",
+            open_function_name="open_roulette_window",
+            window_attr="_roulette_window",
+            metric_suffix="roulette",
+            on_closed_handler=self.on_roulette_window_closed,
+            import_error_message="El juego de ruleta no está disponible.",
+            generic_error_message="Error al lanzar ruleta",
+        )
 
     def on_roulette_window_closed(self, _obj=None):
         """Restore main window when the roulette window is closed."""
-        self._roulette_window = None
-        self.show()
+        self._restore_main_window("_roulette_window", "roulette")
 
     def launch_slots(self):
         """Launch slot machine game"""
-        try:
-            slots_module = importlib.import_module("Tragaperras.tragaperras_main")
-            open_slot_window = getattr(slots_module, "open_slot_window")
-
-            self.hide()
-            window, owns_app, app = open_slot_window(parent=self)
-            self._slots_window = window
-            window.destroyed.connect(self.on_slots_window_closed)
-
-            if owns_app:
-                app.exec()
-
-        except ImportError:
-            self.show()
-            QMessageBox.warning(
-                self, "Error", "El juego de tragaperras no está disponible."
-            )
-        except Exception as e:
-            self.show()
-            print(e)
-            QMessageBox.critical(
-                self, "Error", f"Error al lanzar tragaperras: {str(e)}"
-            )
+        self._launch_game(
+            module_path="Tragaperras.tragaperras_main",
+            open_function_name="open_slot_window",
+            window_attr="_slots_window",
+            metric_suffix="slots",
+            on_closed_handler=self.on_slots_window_closed,
+            import_error_message="El juego de tragaperras no está disponible.",
+            generic_error_message="Error al lanzar tragaperras",
+        )
 
     def on_slots_window_closed(self, _obj=None):
         """Restore main window when slot machine window is closed."""
-        self._slots_window = None
-        self.show()
+        self._restore_main_window("_slots_window", "slots")
 
     def update_balance_display(self):
         """Update the balance display"""
@@ -491,6 +604,7 @@ class MainUI(QMainWindow):
         lang = config_manager.get_language().value
 
         message = f"{achievement.get_name(lang)}\n\n{achievement.get_description(lang)}\n\n{get_text('mission_reward').format(reward=achievement.reward)}"
+        self._play_sound("play_achievement_unlock")
 
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle(get_text("achievement_unlocked"))
@@ -544,6 +658,132 @@ class MainUI(QMainWindow):
         layout.addWidget(close_btn)
 
         dialog.exec()
+
+    def _record_ui_metric(self, metric_name: str, started_at: float) -> None:
+        if hasattr(self, "perf_debug"):
+            self.perf_debug.record_ui_metric(metric_name, started_at)
+
+    def _record_ui_metric_value(self, metric_name: str, elapsed_ms: float) -> None:
+        if hasattr(self, "perf_debug"):
+            self.perf_debug.record_ui_metric_value(metric_name, elapsed_ms)
+            return
+
+        if not isinstance(elapsed_ms, (int, float)):
+            return
+        elapsed = float(elapsed_ms)
+        if elapsed < 0:
+            return
+        if metric_name not in self._ui_perf_metrics:
+            self._ui_perf_metrics[metric_name] = []
+        self._ui_perf_metrics[metric_name].append(elapsed)
+        if len(self._ui_perf_metrics[metric_name]) > 100:
+            self._ui_perf_metrics[metric_name] = self._ui_perf_metrics[metric_name][-100:]
+
+    def _record_bootstrap_metrics(self, bootstrap_metrics) -> None:
+        if hasattr(self, "perf_debug"):
+            self.perf_debug.record_bootstrap_metrics(bootstrap_metrics)
+            return
+
+        if not isinstance(bootstrap_metrics, dict):
+            return
+        for metric_name, elapsed_ms in bootstrap_metrics.items():
+            if not isinstance(metric_name, str) or not metric_name:
+                continue
+            self._record_ui_metric_value(metric_name, elapsed_ms)
+
+    def _build_metric_summary(self, metric_name: str, samples: list[float]) -> dict:
+        if hasattr(self, "perf_debug"):
+            return self.perf_debug.build_metric_summary(metric_name, samples)
+        return PerformanceDebugManager(True, Path(__file__).resolve().parent, self.UI_LATENCY_THRESHOLDS_MS).build_metric_summary(metric_name, samples)
+
+    def _export_ui_metrics_baseline(self) -> None:
+        if hasattr(self, "perf_debug"):
+            self.perf_debug.export_ui_metrics_baseline_async("main")
+
+    @staticmethod
+    def _compute_metric_alert_level(status, avg_ms, threshold_ms, delta_avg_ms):
+        return PerformanceDebugManager._compute_metric_alert_level(status, avg_ms, threshold_ms, delta_avg_ms)
+
+    @staticmethod
+    def _delta_visual(delta_avg_ms):
+        return PerformanceDebugManager._delta_visual(delta_avg_ms)
+
+    @classmethod
+    def _build_performance_csv_rows(cls, snapshots):
+        return PerformanceDebugManager._build_performance_csv_rows(snapshots)
+
+    @staticmethod
+    def _parse_snapshot_timestamp(value):
+        return PerformanceDebugManager._parse_snapshot_timestamp(value)
+
+    @staticmethod
+    def _format_iso_timestamp(value):
+        return PerformanceDebugManager._format_iso_timestamp(value)
+
+    @classmethod
+    def _get_time_preset_bounds(cls, preset_name, now=None):
+        return PerformanceDebugManager._get_time_preset_bounds(preset_name, now=now)
+
+    @classmethod
+    def _filter_performance_snapshots(
+        cls,
+        snapshots,
+        source_filter="Todas",
+        metric_filter="Todas",
+        start_ts=None,
+        end_ts=None,
+    ):
+        return PerformanceDebugManager._filter_performance_snapshots(
+            snapshots,
+            source_filter=source_filter,
+            metric_filter=metric_filter,
+            start_ts=start_ts,
+            end_ts=end_ts,
+        )
+
+    @classmethod
+    def _build_metric_trend_rows(cls, snapshots):
+        return PerformanceDebugManager._build_metric_trend_rows(snapshots)
+
+    @classmethod
+    def _build_source_trend_rows(cls, snapshots):
+        return PerformanceDebugManager._build_source_trend_rows(snapshots)
+
+    @staticmethod
+    def _classify_main_metric_phase(metric_name):
+        return PerformanceDebugManager._classify_main_metric_phase(metric_name)
+
+    @staticmethod
+    def _compute_phase_alert_level(threshold_breaches, threshold_checks, delta_avg_ms):
+        return PerformanceDebugManager._compute_phase_alert_level(threshold_breaches, threshold_checks, delta_avg_ms)
+
+    @classmethod
+    def _build_phase_trend_rows(cls, snapshots):
+        return PerformanceDebugManager._build_phase_trend_rows(snapshots)
+
+    @staticmethod
+    def _parse_delta_value(value):
+        return PerformanceDebugManager._parse_delta_value(value)
+
+    @staticmethod
+    def _parse_breach_ratio(value):
+        return PerformanceDebugManager._parse_breach_ratio(value)
+
+    @classmethod
+    def _sort_performance_rows(cls, rows, sort_mode, row_type):
+        return PerformanceDebugManager._sort_performance_rows(rows, sort_mode, row_type)
+
+    @staticmethod
+    def _sortable_number(value):
+        return PerformanceDebugManager._sortable_number(value)
+
+    @classmethod
+    def _export_performance_csv(cls, snapshots, csv_path: Path):
+        return PerformanceDebugManager._export_performance_csv(snapshots, csv_path)
+
+    def show_performance_baseline(self):
+        if hasattr(self, "perf_debug"):
+            self.perf_debug.show_performance_baseline(self, get_text)
 
     def reset_statistics(self, parent_dialog):
         """Reset all statistics"""
@@ -753,9 +993,76 @@ class MainUI(QMainWindow):
 
         dialog.exec()
 
+    def closeEvent(self, a0) -> None:
+        manager = self.sound_manager
+        if manager is not None:
+            try:
+                manager.stop_background_music()
+            except Exception:
+                pass
+        self._export_ui_metrics_baseline()
+        a0.accept()
+
 
 if __name__ == "__main__":
+    startup_started_at = time.perf_counter()
+    bootstrap_metrics: dict[str, float] = {}
+
+    def _mark_bootstrap_metric(metric_name: str, started_at: float) -> None:
+        bootstrap_metrics[metric_name] = round(
+            (time.perf_counter() - started_at) * 1000.0, 3
+        )
+
     app = QApplication(sys.argv)
-    window = MainUI()
+
+    # ── Initialise PostgreSQL (non-blocking; falls back to offline mode) ──
+    auth_database_import_started_at = time.perf_counter()
+    from RuleTragaperrasJuego.auth.database import init_db, create_tables
+    _mark_bootstrap_metric(
+        "ui.main.bootstrap.import_auth_database_ms", auth_database_import_started_at
+    )
+
+    db_init_started_at = time.perf_counter()
+    if init_db():
+        create_tables()  # idempotent: create tables if they don't exist yet
+    _mark_bootstrap_metric("ui.main.bootstrap.db_init_ms", db_init_started_at)
+
+    # ── Show login dialog ─────────────────────────────────────────────────
+    login_import_started_at = time.perf_counter()
+    from RuleTragaperrasJuego.auth.login_dialog import LoginDialog
+    from PyQt6.QtWidgets import QDialog
+    _mark_bootstrap_metric(
+        "ui.main.bootstrap.import_login_dialog_ms", login_import_started_at
+    )
+
+    login_dialog = LoginDialog()
+    if login_dialog.exec() != QDialog.DialogCode.Accepted:
+        sys.exit(0)  # user closed the dialog without choosing
+
+    # Apply per-user PostgreSQL config when logged in
+    if login_dialog.user_data:
+        user_load_started_at = time.perf_counter()
+        config_manager.load_as_user(
+            login_dialog.user_data["id"],
+            login_dialog.user_data["username"],
+        )
+        _mark_bootstrap_metric(
+            "ui.main.bootstrap.load_user_config_ms", user_load_started_at
+        )
+
+    # ── Launch main UI ────────────────────────────────────────────────────
+    window_init_started_at = time.perf_counter()
+    window = MainUI(
+        startup_started_at=startup_started_at,
+        bootstrap_metrics=bootstrap_metrics,
+    )
+    _mark_bootstrap_metric("ui.main.bootstrap.window_init_ms", window_init_started_at)
+    window._record_bootstrap_metrics(
+        {
+            "ui.main.bootstrap.window_init_ms": bootstrap_metrics[
+                "ui.main.bootstrap.window_init_ms"
+            ]
+        }
+    )
     window.show()
     sys.exit(app.exec())

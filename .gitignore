@@ -27,3 +27,5 @@ coverage.xml
 .DS_Store
 .trunk/*
 .trunk/
+# Environment / secrets
+.env
